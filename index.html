@@ -733,7 +733,7 @@ async function loadF(){
     F.doc=got[0].exists ? clone(got[0].data()) : null;
     F.roster=got[1].docs.map(function(d){ return {uid:d.id, label:(d.data()||{}).label||''}; }).filter(function(r){ return r.uid!==st.me.id; });
     await resolveNames(F.roster.map(function(r){ return r.uid; }));
-  }catch(e){ F.error='Could not load the list of managers. Reload the page to try again.'; }
+  }catch(e){ F.error=(e && e.firebaseCode==='permission-denied') ? 'The team survey is only open to @'+String((window.MJA_CONFIG||{}).allowedDomain||'').replace(/^@/,'')+' accounts. You can still take the test from the Start page.' : 'Could not load the list of managers. Reload the page to try again.'; }
   F.loaded=true; F.loading=false; render();
 }
 function viewFeedback(v){
