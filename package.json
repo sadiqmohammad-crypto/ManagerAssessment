@@ -1,0 +1,7 @@
+{
+  "name": "manager-judgment-assessment",
+  "private": true,
+  "description": "Builds index.html and bridge.js in the folder above from the files in this folder.",
+  "scripts": { "build": "python3 build.py" },
+  "devDependencies": { "firebase": "10.14.1", "esbuild": "0.24.0" }
+}
