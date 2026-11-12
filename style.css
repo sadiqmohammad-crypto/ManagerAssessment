@@ -99,6 +99,7 @@ label.check input{margin-top:3px;width:17px;height:17px;accent-color:var(--accen
 .field .hint{font-size:12.5px;color:var(--ink-3)}
 select,input[type="text"],input[type="number"],input[type="search"],textarea{font:inherit;color:var(--ink);background:var(--surface);border:1px solid var(--line-2);border-radius:var(--r-sm);padding:8px 10px;width:100%;min-width:0}
 textarea{font-family:var(--font-num);font-size:12.5px;line-height:1.5}
+.field textarea.comment{font-family:var(--font-ui);font-size:14px;line-height:1.5;resize:vertical}
 /* question screen */
 .q-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap;font-family:var(--font-num);font-size:12.5px;color:var(--ink-2)}
 .progress{height:4px;background:var(--surface-2);border-radius:2px;overflow:hidden}

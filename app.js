@@ -2,7 +2,8 @@
 'use strict';
 /* ---------- content (no answer key in this file: the key is stored where only the owner can read it) ---------- */
 const CONTENT = __CONTENT__;
-const ITEMS = CONTENT.items, SURVEY = CONTENT.survey;
+const ITEMS = CONTENT.items, SURVEY = CONTENT.survey, SENIOR = CONTENT.senior || [];
+const NOTE_MAX = 600;
 const ITEM_BY_ID = {}; ITEMS.forEach(function(i){ ITEM_BY_ID[i.id] = i; });
 const OPT_IDS = ['a','b','c','d'];
 const DIMS = [
@@ -18,7 +19,9 @@ const PATS = {
   X:{name:'Stops short', about:'Takes a reasonable first step but does not go far enough.', cls:'px', lean:'stopping at a reasonable first step', advice:'Ask what would make the response complete.', module:'Moving from a reasonable first step to the complete response.'}
 };
 const PAT_ORDER = ['A','D','P','R'];
-const LEVELS = {5:'Advanced', 4:'Proficient', 3:'Developing', 2:'Near Minimum', 1:'Below Minimum'};
+const LEVELS = {5:'The Mentor', 4:'The Anchor', 3:'The Builder', 2:'The Apprentice', 1:'The Explorer'};
+const LEVEL_ABOUT = {5:'Reads situations well and could coach others.', 4:'Makes sound, steady calls in most situations.', 3:'Has good foundations; consistency is still growing.', 2:'Is learning the craft, with clear areas to practise.', 1:'Is new to many of these situations and has the most to gain from training.'};
+const CUT_NAME = function(l){ return LEVELS[l].replace(/^The /,''); };
 const QUADS = {KD:'Role model', Kd:'Knows it, team does not see it', kD:'Does it, scores low on test', kd:'Priority development'};
 const QUAD_HELP = {KD:'Use as a mentor and panel expert.', Kd:'Coaching and accountability. More classroom training will not fix it.', kD:'Check reading load first, then add frameworks.', kd:'Foundations plus close coaching.'};
 const SCALE = ['Never','Rarely','Sometimes','Often','Always'];
@@ -134,9 +137,9 @@ function levelOf(total, dim, rf, std){
   let base;
   if(total > std.P + std.sem) base=5; else if(total >= std.P) base=4; else if(total >= std.M) base=3; else if(total >= std.M - std.sem) base=2; else base=1;
   let level=base; const notes=[];
-  if(level===5 && (Math.min.apply(null,dim) < 0 || rf > 1)){ level=4; notes.push(rf>1 ? 'Held at Level 4: more than one red flag.' : 'Held at Level 4: one dimension score is below zero.'); }
-  if(rf >= std.rfFloor){ if(level!==1) notes.push('Set to Level 1: '+rf+' red flags, as many as random guessing produces.'); level=1; }
-  else if(rf >= std.rfLower){ const cap=Math.max(1, base-1); if(cap<level){ level=cap; notes.push('Lowered one level: '+rf+' red flags.'); } }
+  if(level===5 && (Math.min.apply(null,dim) < 0 || rf > 1)){ level=4; notes.push(rf>1 ? 'Shown as '+LEVELS[4]+' rather than '+LEVELS[5]+': more than one red flag.' : 'Shown as '+LEVELS[4]+' rather than '+LEVELS[5]+': one dimension score is below zero.'); }
+  if(rf >= std.rfFloor){ if(level!==1) notes.push('Shown as '+LEVELS[1]+': '+rf+' red flags, as many as random guessing produces.'); level=1; }
+  else if(rf >= std.rfLower){ const cap=Math.max(1, base-1); if(cap<level){ level=cap; notes.push('Moved down one persona: '+rf+' red flags.'); } }
   return {base:base, level:level, notes:notes};
 }
 function splitHalves(){
@@ -166,6 +169,38 @@ function aggregateSurvey(surveys){
   }
   return {by:out, responses:responses};
 }
+function aggregateSenior(seniors){
+  const by={}; let responses=0;
+  for(const s of seniors){
+    const about=(s && s.about) || {};
+    for(const mid in about){
+      const e=about[mid] || {}; const arr=Array.isArray(e.a) ? e.a : [];
+      const dimVals=[];
+      for(let d=1;d<=9;d++){ const vals=[]; SENIOR.forEach(function(q,ix){ if(q.dim===d){ const v=arr[ix]; if(typeof v==='number' && v>=1 && v<=5) vals.push(v); } }); dimVals.push(vals.length ? mean(vals) : null); }
+      const good=String(e.good||'').trim(), grow=String(e.grow||'').trim();
+      if(dimVals.every(function(v){ return v===null; }) && !good && !grow) continue;
+      (by[mid]=by[mid]||[]).push({by:s.uid, at:e.at||null, dim:dimVals, items:arr, good:good, grow:grow}); responses++;
+    }
+  }
+  const out={};
+  for(const mid in by){
+    const R=by[mid].sort(function(a,b){ return String(a.at||'')<String(b.at||'') ? -1 : 1; }); const dim=[];
+    for(let d=0;d<9;d++){ const vals=R.map(function(r){ return r.dim[d]; }).filter(function(v){ return v!==null; }); dim.push(vals.length ? mean(vals) : null); }
+    const have=dim.filter(function(v){ return v!==null; });
+    out[mid]={n:R.length, dim:dim, overall: have.length ? mean(have) : null, raters:R};
+  }
+  return {by:out, responses:responses};
+}
+function devSummarySeniorPart(row, L){
+  if(!row.srOk) return;
+  const sv=row.sr.dim.map(function(v,ix){ return {ix:ix, v:v}; }).filter(function(x){ return x.v!==null; });
+  if(sv.length<2) return;
+  const sh=sv.slice().sort(function(a,b){ return (b.v-a.v) || (a.ix-b.ix); }).slice(0,2), shIx=sh.map(function(x){ return x.ix; });
+  const sl=sv.slice().sort(function(a,b){ return (a.v-b.v) || (a.ix-b.ix); }).filter(function(x){ return shIx.indexOf(x.ix)<0; }).slice(0,2);
+  L.push('What your own manager sees', (row.sr.n>1 ? row.sr.n+' people you report to' : 'Your own manager')+' answered a short survey about you. Only the areas are shown here, not their answers.', '- Rated highest: '+sh.map(function(x){ return DIMS[x.ix].name; }).join('; '));
+  if(sl.length) L.push('- Rated lowest: '+sl.map(function(x){ return DIMS[x.ix].name; }).join('; '));
+  L.push('');
+}
 function canon(ans){ const o={}; ITEMS.forEach(function(it){ const a=(ans && ans[it.id]) || {}; o[it.id]=[a.m||'', a.l||'']; }); return JSON.stringify(o); }
 function buildModel(src, key, S0, cfg){
   const opp=opportunities(key); const rows=[];
@@ -189,6 +224,8 @@ function buildModel(src, key, S0, cfg){
   const std={P:Number(S0.proficient), M:Number(S0.minimum), sem:stats.sem, rfLower:Number(S0.rfLower), rfFloor:Number(S0.rfFloor)};
   sub.forEach(function(r){ Object.assign(r, levelOf(r.total, r.dim, r.rf, std)); });
   const agg=aggregateSurvey(src.surveys||[]); const sv=agg.by;
+  const sagg=aggregateSenior(src.seniors||[]); const srBy=sagg.by;
+  rows.forEach(function(r){ const x=srBy[r.uid]||null; r.sr=x; r.srOk=!!(x && x.overall!==null); });
   rows.forEach(function(r){ const s=sv[r.uid]||null; r.sv=s; r.svOk=!!(s && s.n>=cfg.minRaters && s.overall!==null);
     r.quad=(r.status==='submitted' && r.svOk) ? ((r.level>=4?'K':'k')+(s.overall>=Number(S0.surveyThreshold)?'D':'d')) : null; });
   const levels={1:0,2:0,3:0,4:0,5:0}; sub.forEach(function(r){ levels[r.level]++; });
@@ -204,7 +241,8 @@ function buildModel(src, key, S0, cfg){
     sub.forEach(function(r){ for(const t in pc) pc[t]+=r.dimPat[ix][t]; });
     const wrong=pc.A+pc.D+pc.P+pc.R+pc.X; let dom=null; PAT_ORDER.concat(['X']).forEach(function(t){ if(pc[t]>0 && (dom===null || pc[t]>pc[dom])) dom=t; });
     const tv=rows.filter(function(r){ return r.svOk && r.sv.dim[ix]!==null; }).map(function(r){ return r.sv.dim[ix]; });
-    return {n:D.n, name:D.name, mean:mean(vals), below:vals.length ? vals.filter(function(v){ return v<dimStd; }).length/vals.length : NaN, pat:pc, wrong:wrong, dom:dom, domShare:(wrong && dom) ? pc[dom]/wrong : 0, svMean:tv.length ? mean(tv) : null};
+    const tsr=rows.filter(function(r){ return r.srOk && r.sr.dim[ix]!==null; }).map(function(r){ return r.sr.dim[ix]; });
+    return {n:D.n, name:D.name, mean:mean(vals), below:vals.length ? vals.filter(function(v){ return v<dimStd; }).length/vals.length : NaN, pat:pc, wrong:wrong, dom:dom, domShare:(wrong && dom) ? pc[dom]/wrong : 0, svMean:tv.length ? mean(tv) : null, srMean:tsr.length ? mean(tsr) : null};
   });
   const priority=dims.slice().sort(function(a,b){ return (b.below-a.below) || (a.mean-b.mean) || (a.n-b.n); });
   const patTotal={A:0,D:0,P:0,R:0,X:0}; sub.forEach(function(r){ for(const t in patTotal) patTotal[t]+=r.pat[t]; });
@@ -212,7 +250,7 @@ function buildModel(src, key, S0, cfg){
   const validity={n:pairs.length, r:vr, ci:corrCI(vr, pairs.length)};
   const fairness=BG_FIELDS.map(function(f){ const g={}; sub.forEach(function(r){ const v=bgValue(r, f.id); (g[v]=g[v]||[]).push(r.total); });
     return {id:f.id, label:f.label, groups:Object.keys(g).map(function(v){ return {value:v||'Not stated', n:g[v].length, mean:mean(g[v]), sd:sd(g[v])}; }).sort(function(a,b){ return b.n-a.n; })}; });
-  return {rows:rows, sub:sub, stats:stats, std:std, opp:opp, sv:sv, svResponses:agg.responses, levels:levels, items:items, dims:dims, priority:priority, patTotal:patTotal, validity:validity, fairness:fairness, dimStd:dimStd, S:S0, cfg:cfg};
+  return {rows:rows, sub:sub, stats:stats, std:std, opp:opp, sv:sv, svResponses:agg.responses, srResponses:sagg.responses, levels:levels, items:items, dims:dims, priority:priority, patTotal:patTotal, validity:validity, fairness:fairness, dimStd:dimStd, S:S0, cfg:cfg};
 }
 function devSummary(row, name){
   const order=row.dim.map(function(v,ix){ return {ix:ix, v:v, t:(row.svOk && row.sv.dim[ix]!==null) ? row.sv.dim[ix] : null}; });
@@ -231,6 +269,7 @@ function devSummary(row, name){
     const th=tv.slice().sort(function(a,b){ return (b.t-a.t) || (a.ix-b.ix); }).slice(0,2), tl=tv.slice().sort(function(a,b){ return (a.t-b.t) || (a.ix-b.ix); }).slice(0,2);
     L.push('What your team sees', row.sv.n+' people on your team answered a confidential survey. Only averages are shown.', '- Rated highest: '+th.map(function(x){ return DIMS[x.ix].name; }).join('; '), '- Rated lowest: '+tl.map(function(x){ return DIMS[x.ix].name; }).join('; '), '');
   }
+  devSummarySeniorPart(row, L);
   L.push('Next step', 'Pick one area to develop. Agree with your own manager one situation in the next month where you will practise it, and a date to review how it went.');
   return L.join('\n');
 }
@@ -239,7 +278,7 @@ function makeSample(key){
   const rnd=mulberry32(20261112);
   const gauss=function(){ let u=0,v=0; while(u===0) u=rnd(); while(v===0) v=rnd(); return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v); };
   const pickOne=function(arr){ return arr[Math.floor(rnd()*arr.length)]; };
-  const N=48, responses=[], surveys=[], names={};
+  const N=48, responses=[], surveys=[], names={}, behs=[];
   for(let i=0;i<N;i++){
     const uid='sample-'+String(i+1).padStart(2,'0'); names[uid]='Sample manager '+String(i+1).padStart(2,'0');
     const th=gauss(); const lean=pickOne(['A','D','P','A','D','P','R']); const answers={};
@@ -255,21 +294,32 @@ function makeSample(key){
     if(!submitted){ const keep=6+Math.floor(rnd()*14); ITEMS.forEach(function(it,ix){ if(ix>=keep) delete answers[it.id]; }); }
     const bg={}; BG_FIELDS.forEach(function(f){ bg[f.id]=rnd()<.12 ? '' : pickOne(f.opts.slice(0, f.id==='gender'?2:f.opts.length)); });
     responses.push({uid:uid, form:FORM, status:submitted?'submitted':'in_progress', startedAt:'2026-11-'+day+'T09:00:00.000Z', submittedAt:submitted?'2026-11-'+day+'T09:41:00.000Z':null, bg:bg, answers:answers, activeSec:Math.round((27+rnd()*20)*60)});
-    const nr=submitted ? (rnd()<.8 ? 4+Math.floor(rnd()*6) : Math.floor(rnd()*4)) : 0; const beh=.6*th+.8*gauss();
+    const nr=submitted ? (rnd()<.8 ? 4+Math.floor(rnd()*6) : Math.floor(rnd()*4)) : 0; const beh=.6*th+.8*gauss(); behs.push(submitted ? beh : null);
     for(let j=0;j<nr;j++){ const a=SURVEY.map(function(){ if(rnd()<.04) return 0; return Math.max(1, Math.min(5, Math.round(3.6+.5*beh+.75*gauss()))); }); const o={uid:'sample-r-'+i+'-'+j, about:{}}; o.about[uid]={a:a, at:'2026-11-10T10:00:00.000Z'}; surveys.push(o); }
   }
-  return {responses:responses, surveys:surveys, vault:{}, names:names};
+  const rs=mulberry32(20261113); const gs=function(){ let u=0,v=0; while(u===0) u=rs(); while(v===0) v=rs(); return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v); };
+  const GOOD=['Stays calm under pressure and keeps the team focused.', 'Gives clear, honest updates, including bad news.', 'Builds strong working relationships with other teams.', 'Takes ownership when something goes wrong.', 'Coaches new joiners patiently.'];
+  const GROW=['Hand more decisions to the team instead of stepping in.', 'Raise performance problems earlier.', 'Explain the reasons behind changes, not only the changes.', 'Push back on unrealistic deadlines, with data.', 'Protect time for one-to-ones.'];
+  const sdocs={};
+  for(let i=0;i<N;i++){
+    const b=behs[i]; if(b===null || rs()<.3) continue;
+    const uid='sample-'+String(i+1).padStart(2,'0'), sid='sample-s-'+String(Math.floor(i/4)+1).padStart(2,'0'); names[sid]='Sample senior manager '+String(Math.floor(i/4)+1).padStart(2,'0');
+    const a=SENIOR.map(function(){ if(rs()<.06) return 0; return Math.max(1, Math.min(5, Math.round(3.5+.55*b+.7*gs()))); });
+    (sdocs[sid]=sdocs[sid]||{uid:sid, about:{}}).about[uid]={a:a, good:rs()<.7 ? GOOD[Math.floor(rs()*GOOD.length)] : '', grow:rs()<.7 ? GROW[Math.floor(rs()*GROW.length)] : '', at:'2026-11-11T10:00:00.000Z'};
+  }
+  return {responses:responses, surveys:surveys, seniors:Object.keys(sdocs).map(function(k){ return sdocs[k]; }), vault:{}, names:names};
 }
 function csv(rows){ return rows.map(function(r){ return r.map(function(c){ const s=(c==null?'':String(c)); return /[",\n\r]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s; }).join(','); }).join('\r\n'); }
 const safeText = function(s){ s=String(s||''); return /^[=+\-@]/.test(s) ? "'"+s : s; };
-window.__mja = {scoreResponse:scoreResponse, opportunities:opportunities, levelOf:levelOf, splitHalves:splitHalves, aggregateSurvey:aggregateSurvey, buildModel:buildModel, devSummary:devSummary, makeSample:makeSample, ITEMS:ITEMS, SURVEY:SURVEY, SET_DEFAULT:SET_DEFAULT, CFG_DEFAULT:CFG_DEFAULT};
+window.__mja = {scoreResponse:scoreResponse, opportunities:opportunities, levelOf:levelOf, splitHalves:splitHalves, aggregateSurvey:aggregateSurvey, aggregateSenior:aggregateSenior, buildModel:buildModel, devSummary:devSummary, makeSample:makeSample, ITEMS:ITEMS, SURVEY:SURVEY, SENIOR:SENIOR, LEVELS:LEVELS, SET_DEFAULT:SET_DEFAULT, CFG_DEFAULT:CFG_DEFAULT};
 
 /* ---------- state ---------- */
 const st = {
   ready:false, meLoaded:false, preview:false, db:null, user:null, dl:null, me:{id:null, name:'', isOwner:false}, cfg:Object.assign({}, CFG_DEFAULT), route:'home', names:{},
   a:{loaded:false, loading:false, doc:null, step:'intro', idx:0, order:[], optOrder:{}, bg:{}, consent:false, typedName:'', busy:false, error:'', confirm:false},
   f:{loaded:false, loading:false, doc:null, step:'intro', roster:[], hits:[], q:'', mid:null, midName:'', ans:{}, prevAt:null, busy:false, error:''},
-  c:{loaded:false, loading:false, tab:'overview', old:[], oldVault:[], key:null, settings:Object.assign({}, SET_DEFAULT), responses:[], surveys:[], vault:{}, sample:false, sampleOff:false, sampleData:null, model:null, sel:null, sort:{k:'total', dir:-1}, openItem:null, msg:'', error:'', exportText:'', confirmDelete:null, busy:false, loadedAt:null}
+  s:{loaded:false, loading:false, doc:null, step:'intro', roster:[], hits:[], q:'', mid:null, midName:'', ans:{}, good:'', grow:'', prevAt:null, busy:false, error:''},
+  c:{loaded:false, loading:false, tab:'overview', old:[], oldVault:[], key:null, settings:Object.assign({}, SET_DEFAULT), responses:[], surveys:[], seniors:[], vault:{}, sample:false, sampleOff:false, sampleData:null, model:null, sel:null, sort:{k:'total', dir:-1}, openItem:null, msg:'', error:'', exportText:'', confirmDelete:null, busy:false, loadedAt:null}
 };
 const saver = {pending:null, timer:0, chain:Promise.resolve(), state:'saved', msg:''};
 
@@ -289,6 +339,12 @@ function accessProblem(){
   if(!st.db || !st.me.id) return 'Sign in to your organisation\'s Claude account to take part. If you are signed in and still see this, ask the administrator to share this page with you as a Contributor.';
   return '';
 }
+function openToAll(){ const c=window.MJA_CONFIG||{}; return !c.allowedDomain || !!c.openFeedback; }
+function feedbackDenied(){
+  const dom=String((window.MJA_CONFIG||{}).allowedDomain||'').replace(/^@/,'');
+  if(openToAll() || !dom) return 'Your account could not open this form. Sign out, sign in again and reload the page. If it still fails, tell the administrator.';
+  return 'Feedback is only open to @'+dom+' accounts. You can still take the test from the Start page.';
+}
 function nameOf(uid, label){
   if(st.c.sample && st.c.sampleData && st.c.sampleData.names[uid]) return st.c.sampleData.names[uid];
   return st.names[uid] || label || 'Name unavailable';
@@ -302,7 +358,7 @@ function loading(text){ return h('div',{class:'loading', role:'status'}, text); 
 /* ---------- boot and routing ---------- */
 function onHash(){
   const hsh=(location.hash||'').replace(/^#/,'');
-  st.route=['assessment','feedback','console'].indexOf(hsh)>=0 ? hsh : 'home';
+  st.route=['assessment','feedback','senior','console'].indexOf(hsh)>=0 ? hsh : 'home';
   if(st.ready){ render(); window.scrollTo(0,0); }
 }
 async function boot(){
@@ -330,6 +386,7 @@ function render(){
   if(!st.ready){ put(v, loading('Loading')); return; }
   if(st.route==='assessment') viewAssessment(v);
   else if(st.route==='feedback') viewFeedback(v);
+  else if(st.route==='senior') viewSenior(v);
   else if(st.route==='console') viewConsole(v);
   else viewHome(v);
   if(fid){ const el=v.querySelector('[data-fid="'+fid+'"]'); if(el && !el.disabled) el.focus({preventScroll:true}); }
@@ -339,15 +396,16 @@ function render(){
 function viewHome(v){
   const choice=function(route, who, what, how){ return h('a',{class:'choice', href:'#'+route, id:'go-'+route}, h('span',{class:'who'}, who), h('span',{class:'what'}, what), h('span',{class:'how'}, how), h('span',{class:'go'}, 'Open')); };
   put(v, 
-    h('div',{class:'hero'}, h('p',{class:'eyebrow'}, 'Form A · 27 situations · 18 team questions'), h('h1',null,'Manager Judgment Assessment'),
-      h('p',{class:'lede'}, 'How managers handle everyday situations, paired with confidential feedback from their teams. The results are used to plan management training.')),
+    h('div',{class:'hero'}, h('p',{class:'eyebrow'}, 'Form A · 27 situations · Team and senior feedback'), h('h1',null,'Manager Judgment Assessment'),
+      h('p',{class:'lede'}, 'How managers handle everyday situations, paired with feedback from their teams and from their own managers. The results are used to plan management training.')),
     h('div',{class:'choices'},
       choice('assessment', 'I manage people', 'Take the manager assessment', '27 situations. About 40 minutes, in one sitting.'),
       choice('feedback', 'I report to a manager', 'Give feedback on your manager', '18 questions. About 5 minutes. Confidential.'),
-      st.me.isOwner && choice('console', 'Administrator', 'Open the console', 'Results, levels and training needs. Visible only to you.'))
+      choice('senior', 'A manager reports to me', 'Give feedback on a manager who reports to you', '18 questions and two optional comments. About 6 minutes.'),
+      st.me.isOwner && choice('console', 'Administrator', 'Open the console', 'Results, personas and training needs. Visible only to you.'))
   );
   const prob=st.meLoaded ? accessProblem() : ''; if(prob) put(v, h('div',{class:'notice warn'}, prob));
-  put(v, h('div',{class:'notice'}, h('strong',null,'No scores are shown on this page. '), 'Managers receive a development summary from the administrator. Team feedback is reported only as averages.'));
+  put(v, h('div',{class:'notice'}, h('strong',null,'No scores are shown on this page. '), 'Managers receive a development summary from the administrator. Team feedback is reported only as averages. Feedback from a manager\'s own manager goes to the administrator.'));
 }
 
 /* ---------- manager assessment ---------- */
@@ -506,7 +564,7 @@ async function loadF(){
     F.doc=got[0].exists ? clone(got[0].data()) : null;
     F.roster=got[1].docs.map(function(d){ return {uid:d.id, label:(d.data()||{}).label||''}; }).filter(function(r){ return r.uid!==st.me.id; });
     await resolveNames(F.roster.map(function(r){ return r.uid; }));
-  }catch(e){ F.error=(e && e.firebaseCode==='permission-denied') ? 'The team survey is only open to @'+String((window.MJA_CONFIG||{}).allowedDomain||'').replace(/^@/,'')+' accounts. You can still take the test from the Start page.' : 'Could not load the list of managers. Reload the page to try again.'; }
+  }catch(e){ F.error=(e && e.firebaseCode==='permission-denied') ? feedbackDenied() : 'Could not load the list of managers. Reload the page to try again.'; }
   F.loaded=true; F.loading=false; render();
 }
 function viewFeedback(v){
@@ -592,6 +650,104 @@ function fDone(v){
     h('div',{class:'row'}, h('button',{class:'btn', onclick:function(){ F.mid=null; F.midName=''; F.ans={}; F.q=''; F.hits=[]; F.step='pick'; render(); }}, 'Give feedback on another manager'), h('a',{class:'btn quiet', href:'#'}, 'Back to start')));
 }
 
+/* ---------- feedback from a manager's own manager ---------- */
+async function loadS(){
+  const S=st.s; S.loading=true;
+  try{
+    const got=await Promise.all([st.db.doc('senior/'+st.me.id).get(), st.db.collection('roster').limit(1000).get()]);
+    S.doc=got[0].exists ? clone(got[0].data()) : null;
+    S.roster=got[1].docs.map(function(d){ return {uid:d.id, label:(d.data()||{}).label||''}; }).filter(function(r){ return r.uid!==st.me.id; });
+    await resolveNames(S.roster.map(function(r){ return r.uid; }));
+  }catch(e){ S.error=(e && e.firebaseCode==='permission-denied') ? feedbackDenied() : 'Could not load the list of managers. Reload the page to try again.'; }
+  S.loaded=true; S.loading=false; render();
+}
+function viewSenior(v){
+  const S=st.s;
+  put(v, h('p',{class:'eyebrow'}, 'Senior feedback · 18 questions'));
+  if(!st.meLoaded){ put(v, loading('Loading')); return; }
+  const prob=accessProblem();
+  if(prob){ put(v, h('h1',null,'Feedback on a manager who reports to you'), h('div',{class:'notice warn'}, prob)); return; }
+  if(!S.loaded){ if(!S.loading) loadS(); put(v, loading('Loading')); return; }
+  if(S.step==='done') sDone(v); else if(S.step==='form') sForm(v); else if(S.step==='pick') sPick(v); else sIntro(v);
+}
+function sIntro(v){
+  const S=st.s;
+  put(v, h('h1',null,'Feedback on a manager who reports to you'),
+    h('p',{class:'lede'}, 'Eighteen short questions about what you see this manager do, and two optional comments.'),
+    h('div',{class:'card'}, h('dl',{class:'facts'},
+      h('dt',null,'What you do'), h('dd',null,'Pick a manager who reports to you. For each statement, say how often they do it. It takes about six minutes, and you can give feedback on more than one manager.'),
+      h('dt',null,'Who sees your answers'), h('dd',null,'The administrator sees your answers and comments, with your name. The manager\'s development summary names the two areas you rated highest and lowest, without numbers, and does not quote your comments.'),
+      h('dt',null,'Why'), h('dd',null,'Your view adds what the test and the team survey cannot show. It helps decide which management training is offered. It is not used for pay, promotion or appraisal.'))),
+    S.error && h('div',{class:'notice crit'}, S.error),
+    !st.cfg.open && h('div',{class:'notice warn'}, 'The feedback window is closed. New feedback cannot be given right now.'),
+    h('div',{class:'row'}, h('button',{class:'btn primary', id:'sr-begin', disabled:!st.cfg.open || !!S.error, onclick:function(){ S.step='pick'; render(); window.scrollTo(0,0); }}, 'Continue')));
+}
+function sPick(v){
+  const S=st.s; const list=h('div',{class:'people', id:'sr-people'});
+  const btn=h('button',{class:'btn primary', id:'sr-continue', disabled:!S.mid, onclick:function(){ prefillS(); S.step='form'; render(); window.scrollTo(0,0); }}, 'Continue');
+  const fill=function(){
+    list.replaceChildren(); const q=(S.q||'').trim().toLowerCase(); const seen={};
+    const ros=S.roster.map(function(r){ return {uid:r.uid, name:nameOf(r.uid, r.label), tag:'Taking part'}; }).filter(function(p){ return !q || p.name.toLowerCase().indexOf(q)>=0; });
+    ros.forEach(function(p){ seen[p.uid]=1; });
+    const hits=(S.hits||[]).filter(function(p){ return !seen[p.uid] && p.uid!==st.me.id && p.name; }).map(function(p){ return {uid:p.uid, name:p.name, tag:'From the directory'}; });
+    const all=ros.concat(hits);
+    if(!all.length) list.append(h('div',{class:'person', style:{cursor:'default'}}, h('span',{class:'muted'}, q ? 'No one matches that name.' : 'No managers are listed yet. Type a name to search the directory.')));
+    all.forEach(function(p){ const done=!!(S.doc && S.doc.about && S.doc.about[p.uid]); list.append(h('button',{class:'person', type:'button', 'aria-pressed':String(S.mid===p.uid), 'data-uid':p.uid, onclick:function(){ S.mid=p.uid; S.midName=p.name; btn.disabled=false; fill(); }}, h('span',null,p.name), h('span',{class:'tag'}, done ? 'Answered' : p.tag))); });
+  };
+  let tmr=0;
+  const input=h('input',{type:'search', id:'sr-search', placeholder:'Type a name', value:S.q||'', autocomplete:'off', oninput:function(e){
+    S.q=e.target.value; fill(); clearTimeout(tmr); const q=S.q.trim();
+    if(st.user && typeof st.user.search==='function' && q.length>=2){ tmr=setTimeout(async function(){ try{ const res=await st.user.search(q); if(S.q.trim()!==q) return; S.hits=(res||[]).map(function(p){ return {uid:p.id, name:p.name||''}; }); S.hits.forEach(function(p){ if(p.name) st.names[p.uid]=p.name; }); fill(); }catch(err){} }, 250); }
+    else S.hits=[];
+  }});
+  fill();
+  put(v, h('h1',null,'Who reports to you?'), h('p',{class:'muted'}, 'Pick one manager who reports to you directly. You can give feedback on others afterwards.'),
+    h('div',{class:'field'}, h('label',{for:'sr-search'}, 'Find the manager'), input), list,
+    h('div',{class:'row'}, h('button',{class:'btn', onclick:function(){ S.step='intro'; render(); }}, 'Back'), btn));
+}
+function prefillS(){
+  const S=st.s; S.ans={}; S.good=''; S.grow=''; const prev=S.doc && S.doc.about && S.doc.about[S.mid];
+  if(prev && Array.isArray(prev.a)) SENIOR.forEach(function(q,ix){ if(typeof prev.a[ix]==='number') S.ans[q.id]=prev.a[ix]; });
+  if(prev){ S.good=String(prev.good||''); S.grow=String(prev.grow||''); }
+  S.prevAt=prev ? prev.at : null;
+}
+function sForm(v){
+  const S=st.s; const answered=SENIOR.filter(function(q){ return typeof S.ans[q.id]==='number'; }).length;
+  const note=function(id, label, key){ const ta=h('textarea',{id:id, class:'comment', rows:'3', maxlength:String(NOTE_MAX), 'data-fid':id, oninput:function(e){ S[key]=e.target.value; }}); ta.value=S[key]||''; return h('div',{class:'field'}, h('label',{for:id}, label), ta); };
+  put(v, h('h1',null,'About '+(S.midName||'this manager')),
+    h('p',{class:'muted'}, 'How often does this manager do each of these? Answer from what you have seen over the last six months. Choose Cannot say where you have not seen enough to judge.'),
+    S.prevAt && h('div',{class:'notice'}, 'You answered about this manager on '+dateShort(S.prevAt)+'. Submitting again replaces those answers.'),
+    h('div',{class:'card'}, SENIOR.map(function(q,ix){
+      return h('div',{class:'sq'}, h('p',{id:'sq-'+q.id}, (ix+1)+'. '+q.text),
+        h('div',{class:'scale', role:'group', 'aria-labelledby':'sq-'+q.id},
+          SCALE.map(function(lab,i){ return h('button',{type:'button', 'aria-pressed':String(S.ans[q.id]===i+1), 'data-fid':q.id+'-'+(i+1), onclick:function(){ S.ans[q.id]=i+1; render(); }}, lab); }),
+          h('button',{type:'button', class:'cs', 'aria-pressed':String(S.ans[q.id]===0), 'data-fid':q.id+'-0', onclick:function(){ S.ans[q.id]=0; render(); }}, 'Cannot say')));
+    })),
+    h('div',{class:'card'}, h('div',{class:'stack tight'}, h('h3',null,'Comments'), h('p',{class:'small muted'}, 'Optional. Only the administrator reads them. Describe what the manager does rather than what they are like.')),
+      note('sr-good', 'One strength you would like them to keep using', 'good'),
+      note('sr-grow', 'One change that would make the biggest difference', 'grow')),
+    S.error && h('div',{class:'notice crit'}, S.error),
+    h('div',{class:'row between'},
+      h('div',{class:'row'}, h('button',{class:'btn', onclick:function(){ S.step='pick'; render(); }}, 'Back'), h('button',{class:'btn primary', id:'sr-submit', disabled:answered<SENIOR.length || S.busy, onclick:submitS}, S.busy ? 'Sending' : 'Submit feedback')),
+      h('span',{class:'save', id:'sr-count'}, answered+' of '+SENIOR.length+' answered')));
+}
+async function submitS(){
+  const S=st.s; if(S.busy) return; S.busy=true; S.error=''; render();
+  const entry={a:SENIOR.map(function(q){ return S.ans[q.id]; }), good:String(S.good||'').trim().slice(0,NOTE_MAX), grow:String(S.grow||'').trim().slice(0,NOTE_MAX), at:nowISO()}; const ref=st.db.doc('senior/'+st.me.id);
+  try{
+    if(S.doc){ const p={about:{}, updatedAt:entry.at}; p.about[S.mid]=entry; await retry(function(){ return ref.update(p); }); S.doc.about=S.doc.about||{}; S.doc.about[S.mid]=entry; }
+    else { const doc={uid:st.me.id, about:{}, updatedAt:entry.at}; doc.about[S.mid]=entry; await retry(function(){ return ref.set(doc); }); S.doc=doc; }
+    S.step='done';
+  }catch(e){ S.error=writeError(e); }
+  S.busy=false; render(); window.scrollTo(0,0);
+}
+function sDone(v){
+  const S=st.s;
+  put(v, h('h1',{id:'sr-done'}, 'Thank you. Your feedback is recorded.'),
+    h('p',{class:'lede'}, 'The administrator will read it alongside the test and the team survey.'),
+    h('div',{class:'row'}, h('button',{class:'btn', id:'sr-another', onclick:function(){ S.mid=null; S.midName=''; S.ans={}; S.good=''; S.grow=''; S.q=''; S.hits=[]; S.prevAt=null; S.step='pick'; render(); }}, 'Give feedback on another manager'), h('a',{class:'btn quiet', href:'#'}, 'Back to start')));
+}
+
 /* ---------- administrator console ---------- */
 async function fetchAll(path){
   const out=[]; let last=null;
@@ -608,20 +764,20 @@ async function fetchAll(path){
 async function loadC(){
   const C=st.c; C.loading=true; C.error='';
   try{
-    const got=await Promise.all([st.db.doc('admin/key').get(), st.db.doc('admin/settings').get(), fetchAll('responses'), fetchAll('survey'), fetchAll('admin/vault/r')]);
+    const got=await Promise.all([st.db.doc('admin/key').get(), st.db.doc('admin/settings').get(), fetchAll('responses'), fetchAll('survey'), fetchAll('admin/vault/r'), fetchAll('senior')]);
     C.key=(got[0].exists && got[0].data() && got[0].data().items) ? clone(got[0].data()) : null;
     C.settings=Object.assign({}, SET_DEFAULT, got[1].exists ? got[1].data() : {});
-    C.old=got[2].filter(function(r){ return !isCurrentForm(r); }); C.responses=got[2].filter(isCurrentForm); C.surveys=got[3]; C.vault={}; C.oldVault=[]; got[4].forEach(function(x){ if(isCurrentForm(x)) C.vault[x.uid]=x; else C.oldVault.push(x.uid); });
+    C.old=got[2].filter(function(r){ return !isCurrentForm(r); }); C.responses=got[2].filter(isCurrentForm); C.surveys=got[3]; C.seniors=got[5]; C.vault={}; C.oldVault=[]; got[4].forEach(function(x){ if(isCurrentForm(x)) C.vault[x.uid]=x; else C.oldVault.push(x.uid); });
     C.loadedAt=new Date();
     C.sample=!!C.key && !C.sampleOff && !C.responses.some(function(r){ return r.status==='submitted'; });
     if(C.sample && !C.sampleData) C.sampleData=makeSample(C.key);
-    await resolveNames(C.responses.map(function(r){ return r.uid; }));
+    await resolveNames(C.responses.map(function(r){ return r.uid; }).concat(C.seniors.map(function(s){ return s.uid; })));
   }catch(e){ C.error='Could not load the results. Reload the page to try again.'; }
   C.loaded=true; C.loading=false; computeAll(); render();
 }
 function computeAll(){
   const C=st.c; if(!C.key){ C.model=null; return; }
-  const src=C.sample ? C.sampleData : {responses:C.responses, surveys:C.surveys, vault:C.vault};
+  const src=C.sample ? C.sampleData : {responses:C.responses, surveys:C.surveys, seniors:C.seniors, vault:C.vault};
   C.model=buildModel(src, C.key, C.settings, st.cfg);
   if(C.sel && !C.model.rows.some(function(r){ return r.uid===C.sel; })) C.sel=null;
 }
@@ -650,7 +806,7 @@ function viewConsole(v){
 function cardW(full){ const el=$('#view'); const w=el ? el.clientWidth : 1000; const inner=(full || w<896) ? w-42 : (w-16)/2-42; return Math.max(280, Math.min(1140, Math.floor(inner))); }
 let lastW=0, rsT=0;
 window.addEventListener('resize', function(){ clearTimeout(rsT); rsT=setTimeout(function(){ const el=$('#view'); const w=el ? el.clientWidth : 0; if(st.ready && st.route==='console' && Math.abs(w-lastW)>8){ lastW=w; render(); } }, 160); });
-function levelChip(l){ return h('span',{class:'chip'}, h('span',{class:'sw lv'+l}), 'Level '+l+' · '+LEVELS[l]); }
+function levelChip(l){ return h('span',{class:'chip', title:LEVEL_ABOUT[l]}, h('span',{class:'sw lv'+l}), LEVELS[l]); }
 function patChip(t, extra){ return h('span',{class:'chip'}, h('span',{class:'sw '+PATS[t].cls}), PATS[t].name+(extra||'')); }
 function kpi(k, val, sub){ return h('div',{class:'kpi'}, h('span',{class:'k'}, k), h('span',{class:'v'}, val), sub && h('span',{class:'s'}, sub)); }
 function rulerSvg(M, W){
@@ -660,16 +816,16 @@ function rulerSvg(M, W){
   const step=maxStack>9 ? Math.max(4, 90/maxStack) : 10, top=30, plotH=Math.max(34, maxStack*step+8), y0=top+plotH, H=y0+36; const g=[];
   [-54,-36,-18,0,18,36,54].forEach(function(t){ g.push(S('line',{x1:x(t), x2:x(t), y1:top-4, y2:y0, stroke:'var(--grid)', 'stroke-width':1}), S('text',{x:x(t), y:y0+16, 'text-anchor':'middle', 'font-size':11, fill:'var(--ink-3)'}, signed(t))); });
   g.push(S('line',{x1:L, x2:W-R, y1:y0, y2:y0, stroke:'var(--axis)', 'stroke-width':1}));
-  [['Minimum', M.std.M, 'end'], ['Proficient', M.std.P, 'start']].forEach(function(c){ g.push(S('line',{x1:x(c[1]), x2:x(c[1]), y1:top-4, y2:y0, stroke:'var(--ink-2)', 'stroke-width':1.25, 'stroke-dasharray':'4 3'}), S('text',{x:x(c[1])+(c[2]==='end'?-5:5), y:top-10, 'text-anchor':c[2], 'font-size':11, fill:'var(--ink-2)'}, c[0]+' '+signed(c[1]))); });
-  pts.forEach(function(p){ g.push(S('circle',{cx:x(p.r.total), cy:y0-7-(p.k-1)*step, r:4.5, fill:'var(--lv'+p.r.level+')', stroke:'var(--surface)', 'stroke-width':2, tabindex:0, style:'cursor:pointer', 'data-tip':nameOf(p.r.uid,p.r.label)+'\nScore '+signed(p.r.total)+' · Level '+p.r.level+' '+LEVELS[p.r.level], onclick:function(){ st.c.sel=p.r.uid; st.c.tab='managers'; render(); }})); });
+  [[LEVELS[3]+' from', M.std.M, 'end'], [LEVELS[4]+' from', M.std.P, 'start']].forEach(function(c){ g.push(S('line',{x1:x(c[1]), x2:x(c[1]), y1:top-4, y2:y0, stroke:'var(--ink-2)', 'stroke-width':1.25, 'stroke-dasharray':'4 3'}), S('text',{x:x(c[1])+(c[2]==='end'?-5:5), y:top-10, 'text-anchor':c[2], 'font-size':11, fill:'var(--ink-2)'}, c[0]+' '+signed(c[1]))); });
+  pts.forEach(function(p){ g.push(S('circle',{cx:x(p.r.total), cy:y0-7-(p.k-1)*step, r:4.5, fill:'var(--lv'+p.r.level+')', stroke:'var(--surface)', 'stroke-width':2, tabindex:0, style:'cursor:pointer', 'data-tip':nameOf(p.r.uid,p.r.label)+'\nScore '+signed(p.r.total)+' · '+LEVELS[p.r.level], onclick:function(){ st.c.sel=p.r.uid; st.c.tab='managers'; render(); }})); });
   g.push(S('text',{x:W-R, y:H-3, 'text-anchor':'end', 'font-size':11, fill:'var(--ink-3)'}, 'Total score, -54 to +54'));
-  return S('svg',{viewBox:'0 0 '+W+' '+H, width:'100%', role:'img', 'aria-label':'Each dot is one manager, placed by total score, with the two standards marked'}, g);
+  return S('svg',{viewBox:'0 0 '+W+' '+H, width:'100%', role:'img', 'aria-label':'Each dot is one manager, placed by total score, with the persona cut-offs marked'}, g);
 }
 function levelBars(M){
   const max=Math.max(1, M.levels[1], M.levels[2], M.levels[3], M.levels[4], M.levels[5]);
   return h('div',{class:'bars'}, [5,4,3,2,1].map(function(l){ return [
-    h('span',{class:'lab'}, h('span',{class:'sw lv'+l}), ' Level '+l+' · '+LEVELS[l]),
-    h('div',{class:'track', tabindex:'0', 'data-tip':M.levels[l]+' of '+M.stats.n+' managers at Level '+l}, h('i',{style:{left:'0', width:(100*M.levels[l]/max)+'%', background:'var(--lv'+l+')'}})),
+    h('span',{class:'lab'}, h('span',{class:'sw lv'+l}), ' '+LEVELS[l]),
+    h('div',{class:'track', tabindex:'0', 'data-tip':LEVELS[l]+'. '+LEVEL_ABOUT[l]+'\n'+M.levels[l]+' of '+M.stats.n+' managers'}, h('i',{style:{left:'0', width:(100*M.levels[l]/max)+'%', background:'var(--lv'+l+')'}})),
     h('span',{class:'val'}, M.levels[l]+' · '+pct(M.levels[l], M.stats.n)+'%') ]; }));
 }
 function cOverview(v){
@@ -679,13 +835,14 @@ function cOverview(v){
     kpi('Team survey responses', String(M.svResponses), svOk+' managers have '+st.cfg.minRaters+' or more'),
     kpi('Average score', s.n ? signed(Math.round(s.mean*10)/10) : 'n/a', s.n>1 ? 'SD '+f1(s.sd)+' · range '+signed(s.min)+' to '+signed(s.max) : 'of a possible +54'),
     kpi('Margin of error', f1(s.sem), s.semAuto ? 'from your data · reliability '+f2(s.rel) : 'provisional until 30 managers submit'),
-    kpi('Standards', signed(M.std.P)+' / '+signed(M.std.M), 'Proficient / Minimum · provisional')));
-  put(v, h('div',{class:'card'}, h('div',{class:'row between'}, h('h3',null,'Where each manager scored'), h('div',{class:'legend'}, [1,2,3,4,5].map(function(l){ return h('span',null, h('span',{class:'sw lv'+l}), 'Level '+l); }))),
+    kpi('Persona cut-offs', signed(M.std.P)+' / '+signed(M.std.M), 'Where '+LEVELS[4]+' / '+LEVELS[3]+' start · provisional'),
+    kpi('Senior feedback', String(M.srResponses), M.rows.filter(function(r){ return r.srOk; }).length+' managers covered')));
+  put(v, h('div',{class:'card'}, h('div',{class:'row between'}, h('h3',null,'Where each manager scored'), h('div',{class:'legend'}, [1,2,3,4,5].map(function(l){ return h('span',null, h('span',{class:'sw lv'+l}), LEVELS[l]); }))),
     s.n ? rulerSvg(M, cardW(true)) : h('p',{class:'muted'}, 'Scores appear once managers submit.')));
   const val=M.validity;
   const unlocked=C.sample ? 0 : C.responses.filter(function(r){ return r.status==='submitted' && !C.vault[r.uid]; }).length;
   put(v, h('div',{class:'grid2'},
-    h('div',{class:'card'}, h('h3',null,'Managers by level'), s.n ? levelBars(M) : h('p',{class:'muted'}, 'Levels appear once managers submit.'), h('p',{class:'small muted'}, 'Levels describe judgment on this test. They are a training signal, never a verdict on a person.')),
+    h('div',{class:'card'}, h('h3',null,'Managers by persona'), s.n ? levelBars(M) : h('p',{class:'muted'}, 'Personas appear once managers submit.'), h('p',{class:'small muted'}, 'Personas describe judgment on this test. They are a training signal, never a verdict on a person.')),
     h('div',{class:'card'}, h('h3',null,'Evidence so far'),
       h('dl',{class:'facts'},
         h('dt',null,'Test against team survey'), h('dd',null, val.n>=10 && isFinite(val.r) ? 'r = '+f2(val.r)+' across '+val.n+' managers'+(val.ci ? ' (95% range '+f2(val.ci[0])+' to '+f2(val.ci[1])+')' : '')+'.' : 'Needs at least 10 managers with enough team responses. So far: '+val.n+'.'),
@@ -709,16 +866,17 @@ async function lockNew(){
 function sortVal(r, k){
   if(k==='name') return nameOf(r.uid, r.label).toLowerCase();
   if(k==='status') return r.status==='submitted' ? 1 : 0;
-  if(r.status!=='submitted' && k!=='sv') return -Infinity;
+  if(r.status!=='submitted' && k!=='sv' && k!=='sr') return -Infinity;
   if(k==='total') return r.total; if(k==='level') return r.level*1000+r.total; if(k==='rf') return r.rf;
   if(k==='pat') return Math.max(r.pat.A, r.pat.D, r.pat.P, r.pat.R);
   if(k==='sv') return r.svOk ? r.sv.overall : -1;
+  if(k==='sr') return r.srOk ? r.sr.overall : -1;
   if(k==='quad') return r.quad ? ['kd','kD','Kd','KD'].indexOf(r.quad) : -1;
   return 0;
 }
 function mainPat(r){ let dom=null; PAT_ORDER.forEach(function(t){ if(r.pat[t]>0 && (dom===null || r.pat[t]>r.pat[dom])) dom=t; }); return dom; }
 function cManagers(v){
-  const C=st.c, M=C.model; const cols=[['name','Manager'],['status','Status'],['total','Score'],['level','Level'],['rf','Red flags'],['pat','Main error pattern'],['sv','Team survey'],['quad','Knows and does']];
+  const C=st.c, M=C.model; const cols=[['name','Manager'],['status','Status'],['total','Score'],['level','Persona'],['rf','Red flags'],['pat','Main error pattern'],['sv','Team survey'],['sr','Senior view'],['quad','Knows and does']];
   const rows=M.rows.slice().sort(function(a,b){ const x=sortVal(a,C.sort.k), y=sortVal(b,C.sort.k); return (x<y?-1:x>y?1:0)*C.sort.dir || (a.uid<b.uid?-1:1); });
   const table=h('table',{class:'data', id:'c-managers'},
     h('thead',null, h('tr',null, cols.map(function(c){ return h('th',{class:(c[0]==='total'||c[0]==='rf')?'n':null, 'aria-sort':C.sort.k===c[0] ? (C.sort.dir>0?'ascending':'descending') : null}, h('button',{type:'button', 'data-fid':'sort-'+c[0], onclick:function(){ C.sort=(C.sort.k===c[0]) ? {k:c[0], dir:-C.sort.dir} : {k:c[0], dir:(c[0]==='name'?1:-1)}; render(); }}, c[1]+(C.sort.k===c[0] ? (C.sort.dir>0?' ↑':' ↓') : ''))); }))),
@@ -732,6 +890,7 @@ function cManagers(v){
         h('td',{class:'n'}, sub ? (r.rf>=M.std.rfLower ? h('span',{class:'chip flag'}, String(r.rf)) : String(r.rf)) : ''),
         h('td',null, dom ? patChip(dom, ' · '+r.pat[dom]) : (sub ? 'None' : '')),
         h('td',null, r.svOk ? f2(r.sv.overall)+' of 5 · '+r.sv.n+' people' : (r.sv ? r.sv.n+' so far, needs '+st.cfg.minRaters : 'No responses')),
+        h('td',null, r.srOk ? f2(r.sr.overall)+' of 5'+(r.sr.n>1 ? ' · '+r.sr.n+' people' : '') : 'No response'),
         h('td',null, r.quad ? QUADS[r.quad] : ''));
     })));
   put(v, h('div',{class:'card flush'}, h('div',{class:'scroll-x'}, table)));
@@ -744,15 +903,15 @@ function managerDetail(v, row, M){
   const head=h('div',{class:'row between'}, h('div',{class:'stack tight'}, h('h2',{id:'c-detail-name'}, name), h('span',{class:'small muted'}, sub ? 'Submitted '+dateShort(row.submittedAt)+' · '+Math.round(row.activeSec/60)+' minutes'+(row.activeSec>st.cfg.timeLimitMin*60 ? ' (over the '+st.cfg.timeLimitMin+'-minute guide)' : '') : 'In progress · '+row.answered+' of 27 answered')),
     sub && h('div',{class:'row'}, levelChip(row.level), h('span',{class:'chip num'}, signed(row.total)+' ± '+f1(M.std.sem)), row.quad && h('span',{class:'chip'}, QUADS[row.quad])));
   const card=h('div',{class:'card', id:'c-detail'}, head);
-  if(!sub){ put(card, h('p',{class:'muted'}, 'Scores appear once this manager submits.'), deleteControls(row, name)); put(v, card); return; }
+  if(!sub){ put(card, h('p',{class:'muted'}, 'Scores appear once this manager submits.'), seniorBlock(row), deleteControls(row, name)); put(v, card); return; }
   if(row.notes.length) put(card, h('div',{class:'notice'}, row.notes.join(' ')));
   if(row.changed) put(card, h('div',{class:'notice crit'}, 'The answers stored now differ from the locked copy. The locked copy is used for scoring.'));
   // score band against the two standards
   const W=cardW(true), L=30, R=30, x=function(val){ return L+(val+54)/108*(W-L-R); };
-  put(card, S('svg',{viewBox:'0 0 '+W+' 64', width:'100%', role:'img', 'aria-label':'Score '+signed(row.total)+' with its margin of error against the two standards'},
+  put(card, S('svg',{viewBox:'0 0 '+W+' 64', width:'100%', role:'img', 'aria-label':'Score '+signed(row.total)+' with its margin of error against the persona cut-offs'},
     S('line',{x1:L, x2:W-R, y1:36, y2:36, stroke:'var(--axis)', 'stroke-width':1}),
     [-54,-27,0,27,54].map(function(t){ return S('text',{x:x(t), y:56, 'text-anchor':'middle', 'font-size':11, fill:'var(--ink-3)'}, signed(t)); }),
-    [['Minimum', M.std.M, 'end'], ['Proficient', M.std.P, 'start']].map(function(c){ return [S('line',{x1:x(c[1]), x2:x(c[1]), y1:16, y2:42, stroke:'var(--ink-2)', 'stroke-width':1.25, 'stroke-dasharray':'4 3'}), S('text',{x:x(c[1])+(c[2]==='end'?-5:5), y:12, 'text-anchor':c[2], 'font-size':11, fill:'var(--ink-2)'}, c[0])]; }),
+    [[LEVELS[3]+' from '+signed(M.std.M), M.std.M, 'end'], [LEVELS[4]+' from '+signed(M.std.P), M.std.P, 'start']].map(function(c){ return [S('line',{x1:x(c[1]), x2:x(c[1]), y1:16, y2:42, stroke:'var(--ink-2)', 'stroke-width':1.25, 'stroke-dasharray':'4 3'}), S('text',{x:x(c[1])+(c[2]==='end'?-5:5), y:12, 'text-anchor':c[2], 'font-size':11, fill:'var(--ink-2)'}, c[0])]; }),
     S('rect',{x:x(Math.max(-54,row.total-M.std.sem)), y:30, width:Math.max(2, x(Math.min(54,row.total+M.std.sem))-x(Math.max(-54,row.total-M.std.sem))), height:12, rx:6, fill:'var(--lv'+row.level+')', 'fill-opacity':.3}),
     S('circle',{cx:x(row.total), cy:36, r:6, fill:'var(--lv'+row.level+')', stroke:'var(--surface)', 'stroke-width':2})));
   const dimGrid=h('div',{class:'bars', style:{gridTemplateColumns:'minmax(140px,max-content) 1fr max-content max-content'}}, DIMS.map(function(D,ix){
@@ -762,11 +921,12 @@ function managerDetail(v, row, M){
       h('span',{class:'val'}, signed(val)), h('span',{class:'val'}, t ? 'team '+t : '')]; }));
   const patGrid=h('div',{class:'bars'}, PAT_ORDER.map(function(t){ const n=row.pat[t], o=M.opp[t]; return [h('span',{class:'lab'}, h('span',{class:'sw '+PATS[t].cls}), ' '+PATS[t].name), h('div',{class:'track', tabindex:'0', 'data-tip':PATS[t].name+': chosen as most effective in '+n+' of the '+o+' situations that offer it'}, h('i',{style:{left:'0', width:(o?100*n/o:0)+'%', background:'var(--pat-'+t.toLowerCase()+')'}})), h('span',{class:'val'}, n+' of '+o)]; }));
   put(card, h('div',{class:'grid2'},
-    h('div',{class:'stack'}, h('h3',null,'Dimension profile'), dimGrid, h('p',{class:'small muted'}, 'Bars run from -6 to +6. The dark tick marks the Proficient standard for one dimension. Three situations per dimension are a pointer, not a firm result.')),
+    h('div',{class:'stack'}, h('h3',null,'Dimension profile'), dimGrid, h('p',{class:'small muted'}, 'Bars run from -6 to +6. The dark tick marks where '+LEVELS[4]+' starts, for one dimension. Three situations per dimension are a pointer, not a firm result.')),
     h('div',{class:'stack'}, h('h3',null,'How this manager tends to err'), patGrid, h('p',{class:'small muted'}, 'Counted over the situations where the best response was missed ('+row.missBest+' of 27).'),
       h('h3',null,'Red flags'), row.flags.length ? h('div',{class:'stack tight'}, row.flags.map(function(id){ const it=ITEM_BY_ID[id], k=C.key.items[id], o=it.options.find(function(x){ return x.id===row.answers[id].m; }); return h('div',{class:'notice crit'}, h('strong',null, it.num+' · '+DIMS[it.dim-1].name+'. '), 'Chose as most effective: "'+o.text+'" ', h('span',{class:'muted'}, k.why||'')); })) : h('p',{class:'muted'}, 'None. This manager never chose the least effective response as the most effective.'))));
   if(row.svOk) put(card, h('div',{class:'notice'}, h('strong',null,'Team survey: '+f2(row.sv.overall)+' of 5 from '+row.sv.n+' people. '), row.quad ? QUADS[row.quad]+'. '+QUAD_HELP[row.quad] : ''));
   else put(card, h('p',{class:'small muted'}, row.sv ? 'Team survey: '+row.sv.n+' response'+(row.sv.n===1?'':'s')+' so far. Averages are shown once '+st.cfg.minRaters+' people have answered.' : 'No team survey responses yet for this manager.'));
+  put(card, seniorBlock(row));
   const text=devSummary(row, name);
   put(card, h('div',{class:'stack'}, h('h3',null,'Development summary to send'), h('pre',{class:'summary', id:'c-summary'}, text),
     h('div',{class:'row'}, h('button',{class:'btn sm', id:'c-copy', onclick:function(e){ copyText(text, e.target); }}, 'Copy'), st.dl && h('button',{class:'btn sm', onclick:function(){ saveFile('development-summary.txt', text); }}, 'Download'), h('span',{class:'small muted'}, 'Contains no score, level or ranking.'))));
@@ -776,6 +936,21 @@ function managerDetail(v, row, M){
       return h('tr',null, h('td',null,it.num), h('td',null,DIMS[it.dim-1].name), h('td',null,lab(a.m)), h('td',null,lab(a.l)), h('td',{class:'n'}, signed(row.items[it.id]))); }))))));
   put(card, deleteControls(row, name));
   put(v, card);
+}
+function seniorBlock(row){
+  const x=row.sr;
+  if(!x) return h('p',{class:'small muted', id:'c-senior-none'}, 'No feedback yet from this manager\'s own manager.');
+  const tOk=function(ix){ return row.svOk && row.sv.dim[ix]!==null; };
+  const bars=h('div',{class:'bars'}, DIMS.map(function(D,ix){ const val=x.dim[ix];
+    return [h('span',{class:'lab'}, D.n+'. '+D.name),
+      h('div',{class:'track', tabindex:'0', 'data-tip':D.name+'\nSenior view: '+(val!==null ? f1(val)+' of 5' : 'cannot say')+(tOk(ix) ? '\nTeam survey: '+f1(row.sv.dim[ix])+' of 5' : '')}, val!==null && h('i',{style:{left:'0', width:(100*(val-1)/4)+'%', background:'var(--accent)'}}), tOk(ix) && h('span',{class:'mark', style:{left:(100*(row.sv.dim[ix]-1)/4)+'%'}})),
+      h('span',{class:'val'}, val!==null ? f1(val) : 'n/a')]; }));
+  const who=x.raters.map(function(r){ return nameOf(r.by, '')+(r.at ? ' on '+dateShort(r.at) : ''); }).join(', ');
+  const notes=x.raters.filter(function(r){ return r.good || r.grow; });
+  return h('div',{class:'stack', id:'c-senior'}, h('h3',null,'Their own manager\'s view'),
+    h('p',{class:'small muted'}, (x.overall!==null ? f2(x.overall)+' of 5 on average. ' : '')+'From '+who+'. Bars run from 1 (never) to 5 (always)'+(row.svOk ? '; the dark tick is the team survey average.' : '.')),
+    bars,
+    notes.length ? h('div',{class:'stack tight'}, notes.map(function(r){ return h('div',{class:'notice'}, h('div',{class:'stack tight'}, x.raters.length>1 && h('strong',null, nameOf(r.by, '')), r.good && h('span',null, h('strong',null,'Strength to keep: '), r.good), r.grow && h('span',null, h('strong',null,'Biggest difference: '), r.grow))); })) : h('p',{class:'small muted'}, 'No comments were added.'));
 }
 function deleteControls(row, name){
   const C=st.c; if(C.sample) return null;
@@ -815,6 +990,7 @@ async function deleteManager(uid){
   try{
     await st.db.doc('responses/'+uid).delete(); await st.db.doc('roster/'+uid).delete(); await st.db.doc('admin/vault/r/'+uid).delete();
     for(const s of C.surveys){ if(s.about && s.about[uid]){ const about=Object.assign({}, s.about); delete about[uid]; await st.db.doc('survey/'+s.uid).set(Object.assign({}, s, {about:about})); } }
+    for(const s of (C.seniors||[])){ if(s.about && s.about[uid]){ const about=Object.assign({}, s.about); delete about[uid]; await st.db.doc('senior/'+s.uid).set(Object.assign({}, s, {about:about})); } }
   }catch(e){ C.error='Could not delete everything. Refresh and try again.'; }
   C.busy=false; C.confirmDelete=null; C.sel=null; C.loaded=false; render();
 }
@@ -845,16 +1021,16 @@ function cNeeds(v){
   if(!M.stats.n){ put(v, h('p',{class:'muted'}, 'Training needs appear once managers submit.')); return; }
   const top=M.priority.slice(0,3);
   put(v, h('div',{class:'card'}, h('h3',null,'Teach these first'),
-    h('div',{class:'stack'}, top.map(function(d,i){ return h('div',{class:'row', style:{alignItems:'flex-start'}}, h('span',{class:'chip num'}, String(i+1)), h('div',{class:'grow stack tight'}, h('strong',null, d.name+' · '+pct(d.below*100,100)+'% of managers below the standard'), h('span',{class:'muted'}, d.dom ? 'Most common error: '+PATS[d.dom].name+' ('+pct(d.domShare*100,100)+'% of missed picks). '+PATS[d.dom].module : 'No common error pattern yet.'))); })),
+    h('div',{class:'stack'}, top.map(function(d,i){ return h('div',{class:'row', style:{alignItems:'flex-start'}}, h('span',{class:'chip num'}, String(i+1)), h('div',{class:'grow stack tight'}, h('strong',null, d.name+' · '+pct(d.below*100,100)+'% of managers below the '+CUT_NAME(4)+' line'), h('span',{class:'muted'}, d.dom ? 'Most common error: '+PATS[d.dom].name+' ('+pct(d.domShare*100,100)+'% of missed picks). '+PATS[d.dom].module : 'No common error pattern yet.'))); })),
     h('p',{class:'small muted'}, 'Group results like these are far more reliable than any one manager\'s dimension score.')));
   const tbl=h('table',{class:'data', id:'c-needs'},
-    h('thead',null, h('tr',null, ['Dimension','Average, -6 to +6','Below the standard','Main error pattern','Team survey'].map(function(t,i){ return h('th',null,t); }))),
+    h('thead',null, h('tr',null, ['Dimension','Average, -6 to +6','Below the '+CUT_NAME(4)+' line','Main error pattern','Team survey','Senior view'].map(function(t,i){ return h('th',null,t); }))),
     h('tbody',null, M.priority.map(function(d){ const w=Math.abs(d.mean)/6*50;
       return h('tr',null, h('td',null, d.n+'. '+d.name),
         h('td',null, h('div',{class:'row', style:{flexWrap:'nowrap'}}, h('div',{class:'track grow', tabindex:'0', 'data-tip':d.name+'\nAverage '+f1(d.mean)+' of 6'}, h('i',{style:{left:(d.mean>=0?50:50-w)+'%', width:w+'%', background:(d.mean>=0?'var(--accent)':'var(--neg)')}}), h('span',{class:'zero', style:{left:'50%'}}), h('span',{class:'mark', style:{left:(50+M.dimStd/6*50)+'%'}})), h('span',{class:'num small'}, f1(d.mean)))),
         h('td',null, h('div',{class:'row', style:{flexWrap:'nowrap'}}, h('div',{class:'track grow', tabindex:'0', 'data-tip':pct(d.below*100,100)+'% of managers scored below '+f1(M.dimStd)+' on this dimension'}, h('i',{style:{left:'0', width:(100*d.below)+'%', background:'var(--ink-2)'}})), h('span',{class:'num small'}, pct(d.below*100,100)+'%'))),
         h('td',null, d.dom ? patChip(d.dom, ' · '+pct(d.domShare*100,100)+'%') : ''),
-        h('td',{class:'num'}, d.svMean!==null ? f2(d.svMean) : '')); })));
+        h('td',{class:'num'}, d.svMean!==null ? f2(d.svMean) : ''), h('td',{class:'num'}, d.srMean!==null ? f2(d.srMean) : '')); })));
   put(v, h('div',{class:'card flush'}, h('div',{class:'scroll-x'}, tbl)));
   const wrong=M.patTotal.A+M.patTotal.D+M.patTotal.P+M.patTotal.R+M.patTotal.X;
   const hasPairs=M.sub.some(function(r){ return r.svOk; });
@@ -863,7 +1039,7 @@ function cNeeds(v){
       h('div',{class:'bars'}, PAT_ORDER.concat(['X']).map(function(t){ const n=M.patTotal[t]; return [h('span',{class:'lab'}, h('span',{class:'sw '+PATS[t].cls}), ' '+PATS[t].name), h('div',{class:'track', tabindex:'0', 'data-tip':PATS[t].name+': '+n+' of '+wrong+' missed picks'}, h('i',{style:{left:'0', width:(wrong?100*n/wrong:0)+'%', background:'var(--pat-'+t.toLowerCase()+')'}})), h('span',{class:'val'}, pct(n,wrong)+'%')]; })),
       h('p',{class:'small muted'}, 'The bars add up to 100% of the picks that were not the best response. "Cuts corners" is offered in fewer situations than the others, so its share is naturally smaller.'), h('div',{class:'small muted', style:{marginTop:'8px'}}, PAT_ORDER.concat(['X']).map(function(t){ return h('div',null, h('strong',null,PATS[t].name+': '), PATS[t].about); }))),
     h('div',{class:'card'}, h('h3',null,'Does what managers know show up for their team?'), hasPairs ? scatterSvg(M, cardW(false)) : h('p',{class:'muted'}, 'Appears once a manager has submitted and '+st.cfg.minRaters+' or more people have answered the team survey about them.'),
-      hasPairs && h('p',{class:'small muted'}, 'Each dot is one manager, shown once '+st.cfg.minRaters+' or more of their team have answered the survey. Higher means a better test score (what they know). Further right means a better team rating (what the team sees). The dashed lines are your Proficient standard and team survey threshold from Settings. Shaded boxes are where the test and the team disagree, so each needs a different kind of help.'))));
+      hasPairs && h('p',{class:'small muted'}, 'Each dot is one manager, shown once '+st.cfg.minRaters+' or more of their team have answered the survey. Higher means a better test score (what they know). Further right means a better team rating (what the team sees). The dashed lines are where '+LEVELS[4]+' starts and the team survey threshold, both set in Settings. Shaded boxes are where the test and the team disagree, so each needs a different kind of help.'))));
   put(v, h('div',{class:'card'}, h('h3',null,'Fairness check'), h('p',{class:'small muted'}, 'Average score by group. Groups with fewer than five people are hidden. A gap is a prompt to review the questions, not a finding about the group.'),
     h('div',{class:'scroll-x'}, h('table',{class:'data', id:'c-fair'}, h('thead',null, h('tr',null, ['Group','Managers','Average score','SD'].map(function(t,i){ return h('th',{class:i?'n':null}, t); }))),
       h('tbody',null, M.fairness.map(function(f){ if(!f.groups.some(function(g){ return g.value!=='Not stated'; })) return h('tr',null, h('td',{colspan:'4'}, h('strong',null,f.label), h('span',{class:'muted small'}, '  ·  not answered'))); const shown=f.groups.filter(function(g){ return g.n>=5; }); return [h('tr',null, h('td',{colspan:'4'}, h('strong',null,f.label), shown.length<f.groups.length ? h('span',{class:'muted small'}, '  ·  '+(f.groups.length-shown.length)+' smaller group'+((f.groups.length-shown.length)===1?'':'s')+' hidden') : null)), shown.map(function(g){ return h('tr',null, h('td',null,g.value), h('td',{class:'n'}, String(g.n)), h('td',{class:'n'}, f1(g.mean)), h('td',{class:'n'}, f1(g.sd))); })]; }))))));
@@ -896,19 +1072,19 @@ function cSettings(v){
   const num=function(id, label, val, hint, step){ return h('div',{class:'field'}, h('label',{for:id}, label), h('input',{type:'number', id:id, value:String(val), step:step||'1'}), hint && h('span',{class:'hint'}, hint)); };
   const selMode=h('select',{id:'s-semmode'}, h('option',{value:'auto'}, 'From the data, once 30 managers submit'), h('option',{value:'manual'}, 'Always use the value below')); selMode.value=S0.semMode;
   const selOpen=h('select',{id:'c-open'}, h('option',{value:'open'}, 'Open'), h('option',{value:'closed'}, 'Closed')); selOpen.value=st.cfg.open ? 'open' : 'closed';
-  put(v, h('div',{class:'card'}, h('h3',null,'Standards and level rules'),
-    h('div',{class:'notice warn'}, h('strong',null,'These standards are provisional. '), 'Proficient is set at half of the maximum score and Minimum at a quarter, as placeholders. Replace them with the cut scores your expert panel sets.'),
+  put(v, h('div',{class:'card'}, h('h3',null,'Persona cut-offs and rules'),
+    h('div',{class:'notice warn'}, h('strong',null,'These cut-offs are provisional. '), LEVELS[4]+' starts at half of the maximum score and '+LEVELS[3]+' at a quarter, as placeholders. Replace them with the cut scores your expert panel sets.'),
     h('div',{class:'fields'},
-      num('s-prof','Proficient standard', S0.proficient, 'Score of a manager who just qualifies as managing well. -54 to +54.'),
-      num('s-min','Minimum standard', S0.minimum, 'Score of a manager who just meets the least you accept.'),
+      num('s-prof','Where '+LEVELS[4]+' starts', S0.proficient, 'Score of a manager who just qualifies as managing well. -54 to +54.'),
+      num('s-min','Where '+LEVELS[3]+' starts', S0.minimum, 'Score of a manager who just has the foundations in place.'),
       h('div',{class:'field'}, h('label',{for:'s-semmode'}, 'Margin of error'), selMode, h('span',{class:'hint'}, 'Now in use: '+f1(M.std.sem)+' points'+(M.stats.semAuto?', from your data.':', the value below.'))),
       num('s-sem','Margin of error, manual value', S0.semManual, 'Used until 30 managers submit, or always if you choose so.', '0.1'),
-      num('s-rfl','Red flags that lower a level', S0.rfLower, 'This many or more lowers the level by one.'),
-      num('s-rff','Red flags that set Level 1', S0.rfFloor, 'Random guessing produces about 7.'),
+      num('s-rfl','Red flags that move a manager down one persona', S0.rfLower, 'This many or more moves the manager down one persona.'),
+      num('s-rff','Red flags that set '+LEVELS[1], S0.rfFloor, 'Random guessing produces about 7.'),
       num('s-svthr','Team survey threshold', S0.surveyThreshold, 'Average, 1 to 5, at which the team is taken to see effective managing.', '0.05')),
     h('h3',null,'Running the assessment'),
     h('div',{class:'fields'},
-      h('div',{class:'field'}, h('label',{for:'c-open'}, 'Assessment window'), selOpen, h('span',{class:'hint'}, 'Closing blocks new starts and new team feedback.')),
+      h('div',{class:'field'}, h('label',{for:'c-open'}, 'Assessment window'), selOpen, h('span',{class:'hint'}, 'Closing blocks new starts and new feedback.')),
       num('c-time','Time guide, minutes', st.cfg.timeLimitMin, 'Shown to managers. Overruns are reported, not blocked.'),
       num('c-minr','Team responses needed', st.cfg.minRaters, 'Averages are hidden below this number. Five is recommended; never fewer than three.')),
     C.msg && h('div',{class:'notice'+(C.msgBad?' crit':' good'), id:'c-msg', role:'status'}, C.msg),
@@ -925,7 +1101,7 @@ function cSettings(v){
   put(v, h('div',{class:'card'}, h('h3',null,'Export'), h('p',{class:'muted'}, C.sample ? 'Exports are switched off while sample data is showing.' : 'Files contain names and results. Store them where only the administrators can reach them.'),
     h('div',{class:'row'}, h('button',{class:'btn sm', id:'x-managers', disabled:C.sample, onclick:function(){ saveFile('manager-results.csv', exportManagers()); }}, 'Manager results (CSV)'), h('button',{class:'btn sm', id:'x-answers', disabled:C.sample, onclick:function(){ saveFile('manager-answers.csv', exportAnswers()); }}, 'Every answer (CSV)'), h('button',{class:'btn sm', id:'x-items', disabled:C.sample, onclick:function(){ saveFile('question-statistics.csv', exportItems()); }}, 'Question statistics (CSV)')),
     C.exportText && h('div',{class:'stack'}, h('p',{class:'small muted'}, 'Downloads are not available in this view. Copy the text below into a file.'), h('textarea',{id:'x-text', rows:'8', readonly:true}, C.exportText))));
-  if(!C.sample) put(v, h('div',{class:'card'}, h('h3',null,'End of cycle'), h('p',{class:'muted'}, 'Delete every answer, every piece of team feedback and every locked copy. The answer key and settings are kept. This cannot be undone.'),
+  if(!C.sample) put(v, h('div',{class:'card'}, h('h3',null,'End of cycle'), h('p',{class:'muted'}, 'Delete every answer, all team and senior feedback, and every locked copy. The answer key and settings are kept. This cannot be undone.'),
     C.confirmDelete==='ALL' ? h('div',{class:'row'}, h('div',{class:'field', style:{maxWidth:'220px'}}, h('label',{for:'wipe-word'}, 'Type DELETE to confirm'), h('input',{type:'text', id:'wipe-word', autocomplete:'off'})), h('button',{class:'btn sm', onclick:function(){ C.confirmDelete=null; render(); }}, 'Keep the data'), h('button',{class:'btn sm danger', id:'wipe-go', disabled:C.busy, onclick:wipeAll}, C.busy ? 'Deleting' : 'Delete all participant data'))
       : h('div',{class:'row'}, h('button',{class:'btn sm danger', id:'wipe', onclick:function(){ C.confirmDelete='ALL'; render(); }}, 'Delete all participant data'))));
 }
@@ -934,10 +1110,10 @@ async function saveSettings(){
   const S2={proficient:num('s-prof'), minimum:num('s-min'), semMode:$('#s-semmode').value, semManual:num('s-sem'), rfLower:num('s-rfl'), rfFloor:num('s-rff'), surveyThreshold:num('s-svthr')};
   const cfg2={open:$('#c-open').value==='open', timeLimitMin:num('c-time'), minRaters:num('c-minr'), form:FORM};
   let bad='';
-  if(!(S2.proficient>S2.minimum)) bad='The Proficient standard must be higher than the Minimum standard.';
-  else if(S2.proficient>54 || S2.minimum<-54) bad='Standards must lie between -54 and +54.';
+  if(!(S2.proficient>S2.minimum)) bad='Where '+LEVELS[4]+' starts must be higher than where '+LEVELS[3]+' starts.';
+  else if(S2.proficient>54 || S2.minimum<-54) bad='Cut-offs must lie between -54 and +54.';
   else if(!(S2.semManual>0 && S2.semManual<=20)) bad='The margin of error must be between 0 and 20.';
-  else if(!(S2.rfLower>=1 && S2.rfFloor>S2.rfLower && S2.rfFloor<=27)) bad='The red-flag numbers must rise: the Level 1 number has to be higher than the lowering number.';
+  else if(!(S2.rfLower>=1 && S2.rfFloor>S2.rfLower && S2.rfFloor<=27)) bad='The red-flag numbers must rise: the '+LEVELS[1]+' number has to be higher than the move-down number.';
   else if(!(S2.surveyThreshold>=1 && S2.surveyThreshold<=5)) bad='The team survey threshold must be between 1 and 5.';
   else if(!(cfg2.minRaters>=3 && cfg2.minRaters<=50 && Number.isInteger(cfg2.minRaters))) bad='Team responses needed must be a whole number of at least 3.';
   else if(!(cfg2.timeLimitMin>=10 && cfg2.timeLimitMin<=180)) bad='The time guide must be between 10 and 180 minutes.';
@@ -961,8 +1137,8 @@ async function saveKey(){
   C.busy=false; computeAll(); render();
 }
 function exportManagers(){
-  const M=st.c.model; const head=['name','status','submitted','minutes','score','margin_of_error','level','level_name','red_flags','missed_best'].concat(DIMS.map(function(d){ return 'dim'+d.n; }), ['avoids','dominates','appeases','bends_rules','partial','team_responses','team_average','knows_and_does'], DIMS.map(function(d){ return 'team_dim'+d.n; }), BG_FIELDS.map(function(f){ return f.id; }));
-  const rows=M.rows.map(function(r){ const sub=r.status==='submitted'; return [safeText(nameOf(r.uid,r.label)), r.status, r.submittedAt||'', Math.round(r.activeSec/60), sub?r.total:'', sub?f1(M.std.sem):'', sub?r.level:'', sub?LEVELS[r.level]:'', sub?r.rf:'', sub?r.missBest:''].concat(DIMS.map(function(d,ix){ return sub?r.dim[ix]:''; }), sub?[r.pat.A,r.pat.D,r.pat.P,r.pat.R,r.pat.X]:['','','','',''], [r.sv?r.sv.n:0, r.svOk?f2(r.sv.overall):'', r.quad?QUADS[r.quad]:''], DIMS.map(function(d,ix){ return (r.svOk && r.sv.dim[ix]!==null) ? f2(r.sv.dim[ix]) : ''; }), BG_FIELDS.map(function(f){ return safeText(bgValue(r, f.id)); })); });
+  const M=st.c.model; const head=['name','status','submitted','minutes','score','margin_of_error','level','persona','red_flags','missed_best'].concat(DIMS.map(function(d){ return 'dim'+d.n; }), ['avoids','dominates','appeases','bends_rules','partial','team_responses','team_average','knows_and_does'], DIMS.map(function(d){ return 'team_dim'+d.n; }), ['senior_responses','senior_average'], DIMS.map(function(d){ return 'senior_dim'+d.n; }), ['senior_strength','senior_change'], BG_FIELDS.map(function(f){ return f.id; }));
+  const rows=M.rows.map(function(r){ const sub=r.status==='submitted'; return [safeText(nameOf(r.uid,r.label)), r.status, r.submittedAt||'', Math.round(r.activeSec/60), sub?r.total:'', sub?f1(M.std.sem):'', sub?r.level:'', sub?LEVELS[r.level]:'', sub?r.rf:'', sub?r.missBest:''].concat(DIMS.map(function(d,ix){ return sub?r.dim[ix]:''; }), sub?[r.pat.A,r.pat.D,r.pat.P,r.pat.R,r.pat.X]:['','','','',''], [r.sv?r.sv.n:0, r.svOk?f2(r.sv.overall):'', r.quad?QUADS[r.quad]:''], DIMS.map(function(d,ix){ return (r.svOk && r.sv.dim[ix]!==null) ? f2(r.sv.dim[ix]) : ''; }), [r.sr?r.sr.n:0, r.srOk?f2(r.sr.overall):''], DIMS.map(function(d,ix){ return (r.srOk && r.sr.dim[ix]!==null) ? f2(r.sr.dim[ix]) : ''; }), [safeText(r.sr ? r.sr.raters.map(function(x){ return x.good; }).filter(Boolean).join(' | ') : ''), safeText(r.sr ? r.sr.raters.map(function(x){ return x.grow; }).filter(Boolean).join(' | ') : '')], BG_FIELDS.map(function(f){ return safeText(bgValue(r, f.id)); })); });
   return csv([head].concat(rows));
 }
 function exportAnswers(){
@@ -981,6 +1157,7 @@ async function wipeAll(){
     for(const r of C.responses) await st.db.doc('responses/'+r.uid).delete();
     for(const d of ros.docs) await st.db.doc('roster/'+d.id).delete();
     for(const s of C.surveys) await st.db.doc('survey/'+s.uid).delete();
+    for(const s of (C.seniors||[])) await st.db.doc('senior/'+s.uid).delete();
     for(const uid in C.vault) await st.db.doc('admin/vault/r/'+uid).delete();
   }catch(e){ C.error='Could not delete everything. Refresh and try again.'; }
   C.busy=false; C.confirmDelete=null; C.sel=null; C.loaded=false; render();

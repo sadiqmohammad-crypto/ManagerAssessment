@@ -20,16 +20,16 @@ def rep(src, a, b):
 # Start when the Firebase bridge has signed someone in, instead of immediately.
 js = rep(js, "\nboot();\n})();", "\nwindow.__mjaStart = function(){ if(window.__mjaStarted) return; window.__mjaStarted = true; boot(); };\n})();")
 js = rep(js, "Your account has view-only access to this page, so nothing can be saved. Ask the administrator to share it with you as a Contributor.",
-         "Your account is not allowed to save this. Sign out and sign in again with your company Google account.")
+         "Your account is not allowed to save this. Sign out, sign in again and try once more. If it keeps happening, tell the administrator.")
 js = rep(js, "Sign in to your organisation\\'s Claude account to take part. If you are signed in and still see this, ask the administrator to share this page with you as a Contributor.",
-         "Sign in with your company Google account to take part.")
+         "Sign in with your Google account to take part.")
 js = rep(js, "This is a preview copy of the page, so answers cannot be saved here. Open the published page to take part.",
          "This copy of the page is not connected to its database, so answers cannot be saved. Open the published site to take part.")
 js = rep(js, "'Results are visible only to the owner of this page.'", "'Results are visible only to administrators.'")
 js = rep(js, "'Share this page from the Share menu as Contributor. Viewers cannot save answers. Do not make anyone an Editor: editors can change this page.'",
-         "'Anyone with a company Google account can sign in and take part. Only accounts listed as administrators in Firestore can open this console.'")
+         "(openToAll() ? 'Anyone with a Google account can sign in and take part, including people outside the company.' : 'Anyone with a company Google account can sign in and take part.')+' Only accounts listed as administrators in Firestore can open this console.'")
 js = rep(js, "'Add #assessment to the page link for managers, and #feedback for their teams.'",
-         "'Send managers the site address with #assessment on the end, and their teams the address with #feedback.'")
+         "'Send managers the site address with #assessment on the end, their teams the address with #feedback, and their own managers the address with #senior.'")
 js = js.replace('__CONTENT__', json.dumps(content, ensure_ascii=False))
 assert '"why"' not in js and '"tags"' not in js, 'answer key text found in the page'
 

@@ -4,16 +4,17 @@ About 20 minutes, once. You need a GitHub account and your company Google accoun
 
 When you finish, the site lives at **https://ACCOUNT.github.io/REPOSITORY/**. Replace ACCOUNT with the GitHub account or organisation that owns the repository, and REPOSITORY with its name, wherever they appear in this guide. For example, a repository at `github.com/trainers-media-lab/AssessmentLab` is published at `https://trainers-media-lab.github.io/AssessmentLab/`.
 
-It has three addresses:
+It has four addresses:
 - `…/REPOSITORY/#assessment` for managers
 - `…/REPOSITORY/#feedback` for their team members
+- `…/REPOSITORY/#senior` for the people those managers report to
 - `…/REPOSITORY/#console` for you (administrators only)
 
 ## How it works
 
 - **GitHub Pages** serves the page. It is a static file and holds no answers and no answer key.
-- **Firebase Authentication** handles sign-in. Only verified Google accounts on your company domain (set in `config.js` and `firestore.rules`) can sign in.
-- **Cloud Firestore** stores the answers, the team feedback and the answer key.
+- **Firebase Authentication** handles sign-in. Any Google account with a verified email can sign in and take part. Only administrators, who must have a company account, can open the console (set in `config.js` and `firestore.rules`).
+- **Cloud Firestore** stores the answers, the team and senior feedback, and the answer key.
 - **`firestore.rules`** decides who can read what. Firebase enforces it whatever the page does:
 
 | Data | Who can read it | Who can change it |
@@ -21,6 +22,7 @@ It has three addresses:
 | Answer key, settings, locked copies | Administrators | Administrators |
 | A manager's answers | That manager and administrators | That manager, until they submit; administrators |
 | A person's team feedback | That person and administrators | That person; administrators |
+| Feedback a person gives on a manager who reports to them | That person and administrators | That person; administrators |
 | List of managers taking part (names only) | Anyone signed in | Each manager adds themselves |
 | Display names | Anyone signed in | Each person, their own |
 
@@ -99,8 +101,9 @@ Keep the key file private. Don't email it around, don't add it to this repositor
 1. Ask one manager and one team member to try it:
    - Manager: `https://ACCOUNT.github.io/REPOSITORY/#assessment`
    - Team member: `https://ACCOUNT.github.io/REPOSITORY/#feedback`
-2. In the console, check the manager appears with a level, then delete the trial data: **Settings** → **End of cycle**.
-3. Send the links to everyone. Anyone with a company Google account can sign in; nobody needs to be added first.
+   - The manager's own manager: `https://ACCOUNT.github.io/REPOSITORY/#senior`
+2. In the console, check the manager appears with a persona, then delete the trial data: **Settings** → **End of cycle**.
+3. Send the links to everyone. Anyone with a Google account can sign in; nobody needs to be added first.
 
 While responses come in, press **Lock new submissions** on the Overview tab now and then. It keeps an administrator-only copy of every submitted answer sheet.
 
@@ -110,9 +113,9 @@ While responses come in, press **Lock new submissions** on the Overview tab now 
 | --- | --- |
 | "Not connected yet" | `config.js` still has empty values (step 3). After committing, wait a minute and reload. |
 | Sign-in window closes straight away, or "not yet authorised" | Add `ACCOUNT.github.io` under Authentication → Settings → Authorized domains (step 4). Allow pop-ups for the site. |
-| "That account cannot take part" | The account isn't on the company domain, or Google hasn't verified its email. |
+| "That account cannot take part" | Google hasn't verified the account's email address. If `openTest` is `false` in `config.js`, the account must also be on the company domain. |
 | "Administrator only" when you open the console | The document ID in `admins` doesn't exactly match your email in lower case (step 7). Reload after fixing. |
-| "Your account is not allowed to save this" | The rules weren't published, or the domain in the rules doesn't match your email (step 5). |
+| "Your account is not allowed to save this" | The rules weren't published, or an older copy is published. Publish the current `firestore.rules` (step 5). |
 | A manager can't change answers after submitting | Intended. Delete their data in the console (Managers → select them → Delete) if they need to retake. |
 
 ## Changing the questions or the page

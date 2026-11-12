@@ -7,26 +7,25 @@ rules_version = '2';
 // Administrators are listed in the "admins" collection: one document per administrator, whose ID is
 // their email address in lower case. Add them by hand in the Firebase console. Nobody can add one from the site.
 //
-// Anyone with a verified Google account can take the test (anyAccount() below). The team survey,
-// the roster and the list of names stay limited to databeat.io accounts (signedIn() below).
+// Anyone with a verified Google account can take the test and give feedback (anyAccount() below).
+// Administrators must also have a databeat.io account (signedIn() below).
 // If your company's email domain is not databeat.io, change it in signedIn() below and in config.js.
 
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Any Google account with a verified email: enough to take the test.
+    // Any Google account with a verified email: enough to take the test and give feedback.
     function anyAccount() {
       return request.auth != null
         && request.auth.token.email_verified == true;
     }
-    // A databeat.io account: needed for the team survey, the roster and the list of names.
+    // A databeat.io account: administrators must have one.
     function signedIn() {
       return anyAccount()
         && request.auth.token.email.lower().matches('.*@databeat[.]io$');
     }
     function me() { return request.auth.token.email.lower(); }
     function isAdmin() { return signedIn() && exists(/databases/$(database)/documents/admins/$(me())); }
-    function isSelf(uid) { return signedIn() && request.auth.uid == uid; }
     function isOwn(uid) { return anyAccount() && request.auth.uid == uid; }
 
     // Administrator list: each person can check only whether they themselves are on it. Edit it in the console.
@@ -46,19 +45,19 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
-    // Display names, so team members can find their manager. Each person writes only their own.
+    // Display names, so people can find the manager they give feedback on. Each person writes only their own.
     match /people/{uid} {
-      allow read: if signedIn() || isOwn(uid);
+      allow read: if anyAccount();
       allow create, update: if isOwn(uid)
         && request.resource.data.keys().hasOnly(['name', 'updatedAt'])
         && request.resource.data.name is string && request.resource.data.name.size() <= 120;
       allow delete: if isAdmin() || isOwn(uid);
     }
 
-    // Managers taking part (no answers here): everyone signed in can read it, to pick their manager.
+    // Managers taking part (no answers here): everyone signed in can read it, to pick the manager they give feedback on.
     match /roster/{uid} {
-      allow read: if signedIn();
-      allow create, update, delete: if isAdmin() || isSelf(uid);
+      allow read: if anyAccount();
+      allow create, update, delete: if isAdmin() || isOwn(uid);
     }
 
     // A manager's answers: that manager and administrators only.
@@ -72,10 +71,18 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // Feedback on a manager from the manager they report to: stored against the person who gave it.
+    // That person and administrators only.
+    match /senior/{uid} {
+      allow read: if isAdmin() || isOwn(uid);
+      allow create, update: if isAdmin() || (isOwn(uid) && request.resource.data.uid == uid);
+      allow delete: if isAdmin();
+    }
+
     // Team feedback: stored against the person who gave it. That person and administrators only.
     match /survey/{uid} {
-      allow read: if isAdmin() || isSelf(uid);
-      allow create, update: if isAdmin() || (isSelf(uid) && request.resource.data.uid == uid);
+      allow read: if isAdmin() || isOwn(uid);
+      allow create, update: if isAdmin() || (isOwn(uid) && request.resource.data.uid == uid);
       allow delete: if isAdmin();
     }
   }
