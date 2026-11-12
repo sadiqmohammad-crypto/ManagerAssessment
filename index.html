@@ -238,17 +238,19 @@ const DIMS = [
   {n:7, name:'Fairness and integrity'}, {n:8, name:'Team climate'}, {n:9, name:'Change and cross-team work'}
 ];
 const PATS = {
-  A:{name:'Avoids', cls:'pa', lean:'waiting, or passing the issue to someone else', advice:'Pick one conversation you have been postponing and hold it this week.', module:'Raising problems early, setting expectations and deciding in time. Practise with rehearsed difficult conversations.'},
-  D:{name:'Dominates', cls:'pd', lean:'deciding or correcting on your own where a question would work better', advice:'Before you give an instruction, ask one question about how the other person sees it.', module:'Asking before telling, delegating outcomes and inviting dissent. Practise coaching in threes.'},
-  P:{name:'Appeases', cls:'pp', lean:'protecting harmony at the cost of the standard', advice:'State the standard first, then offer your support for meeting it.', module:'Holding a standard with care, saying no and letting people own their work. Practise role-plays that end in a clear commitment.'},
-  R:{name:'Bends rules', cls:'pr', lean:'making an exception to the stated rule or to the full facts', advice:'Say your criteria out loud before you decide, and apply them the same way each time.', module:'Fair process, transparency and owning mistakes. Discuss real dilemmas with a senior leader.'},
-  X:{name:'Partial', cls:'px', lean:'stopping at a reasonable first step', advice:'Ask what would make the response complete.', module:'Moving from a reasonable first step to the complete response.'}
+  A:{name:'Sidesteps', about:'Waits, delays, or passes the problem to someone else.', cls:'pa', lean:'waiting, or passing the issue to someone else', advice:'Pick one conversation you have been postponing and hold it this week.', module:'Raising problems early, setting expectations and deciding in time. Practise with rehearsed difficult conversations.'},
+  D:{name:'Takes over', about:'Decides or acts alone when asking or involving others would work better.', cls:'pd', lean:'deciding or correcting on your own where a question would work better', advice:'Before you give an instruction, ask one question about how the other person sees it.', module:'Asking before telling, delegating outcomes and inviting dissent. Practise coaching in threes.'},
+  P:{name:'Keeps the peace', about:'Protects harmony or feelings at the cost of the standard.', cls:'pp', lean:'protecting harmony at the cost of the standard', advice:'State the standard first, then offer your support for meeting it.', module:'Holding a standard with care, saying no and letting people own their work. Practise role-plays that end in a clear commitment.'},
+  R:{name:'Cuts corners', about:'Makes an exception to the rules or leaves out the full facts.', cls:'pr', lean:'making an exception to the stated rule or to the full facts', advice:'Say your criteria out loud before you decide, and apply them the same way each time.', module:'Fair process, transparency and owning mistakes. Discuss real dilemmas with a senior leader.'},
+  X:{name:'Stops short', about:'Takes a reasonable first step but does not go far enough.', cls:'px', lean:'stopping at a reasonable first step', advice:'Ask what would make the response complete.', module:'Moving from a reasonable first step to the complete response.'}
 };
 const PAT_ORDER = ['A','D','P','R'];
 const LEVELS = {5:'Advanced', 4:'Proficient', 3:'Developing', 2:'Near Minimum', 1:'Below Minimum'};
-const QUADS = {KD:'Role model', Kd:'Knowing-doing gap', kD:'Intuitive, or a test problem', kd:'Priority development'};
+const QUADS = {KD:'Role model', Kd:'Knows it, team does not see it', kD:'Does it, scores low on test', kd:'Priority development'};
 const QUAD_HELP = {KD:'Use as a mentor and panel expert.', Kd:'Coaching and accountability. More classroom training will not fix it.', kD:'Check reading load first, then add frameworks.', kd:'Foundations plus close coaching.'};
 const SCALE = ['Never','Rarely','Sometimes','Often','Always'];
+const BG_LEGACY = {level:{'First-line manager':'Team lead', 'Manager of managers':'Manager', 'Senior leader':'Directors & Above'}};
+function bgValue(r, id){ const v=(r.bg && r.bg[id]) || ''; return (BG_LEGACY[id] && BG_LEGACY[id][v]) || v; }
 const BG_FIELDS = [
   {id:'level', label:'Your level', opts:['Team lead','Manager','Directors & Above']},
   {id:'years', label:'Years managing people', opts:['Under 1','1 to 3','4 to 7','8 or more']},
@@ -435,7 +437,7 @@ function buildModel(src, key, S0, cfg){
   const patTotal={A:0,D:0,P:0,R:0,X:0}; sub.forEach(function(r){ for(const t in patTotal) patTotal[t]+=r.pat[t]; });
   const pairs=sub.filter(function(r){ return r.svOk; }); const vr=pearson(pairs.map(function(r){ return r.total; }), pairs.map(function(r){ return r.sv.overall; }));
   const validity={n:pairs.length, r:vr, ci:corrCI(vr, pairs.length)};
-  const fairness=BG_FIELDS.map(function(f){ const g={}; sub.forEach(function(r){ const v=(r.bg && r.bg[f.id]) || ''; (g[v]=g[v]||[]).push(r.total); });
+  const fairness=BG_FIELDS.map(function(f){ const g={}; sub.forEach(function(r){ const v=bgValue(r, f.id); (g[v]=g[v]||[]).push(r.total); });
     return {id:f.id, label:f.label, groups:Object.keys(g).map(function(v){ return {value:v||'Not stated', n:g[v].length, mean:mean(g[v]), sd:sd(g[v])}; }).sort(function(a,b){ return b.n-a.n; })}; });
   return {rows:rows, sub:sub, stats:stats, std:std, opp:opp, sv:sv, svResponses:agg.responses, levels:levels, items:items, dims:dims, priority:priority, patTotal:patTotal, validity:validity, fairness:fairness, dimStd:dimStd, S:S0, cfg:cfg};
 }
@@ -1060,9 +1062,9 @@ function scatterSvg(M, W){
   [1,2,3,4,5].forEach(function(t){ g.push(S('line',{x1:x(t), x2:x(t), y1:T, y2:H-B, stroke:'var(--grid)', 'stroke-width':1}), S('text',{x:x(t), y:H-B+16, 'text-anchor':'middle', 'font-size':11, fill:'var(--ink-3)'}, String(t))); });
   [-54,-27,0,27,54].forEach(function(t){ g.push(S('line',{x1:L, x2:W-R, y1:y(t), y2:y(t), stroke:'var(--grid)', 'stroke-width':1}), S('text',{x:L-8, y:y(t)+4, 'text-anchor':'end', 'font-size':11, fill:'var(--ink-3)'}, signed(t))); });
   g.push(S('line',{x1:x(thr), x2:x(thr), y1:T, y2:H-B, stroke:'var(--ink-2)', 'stroke-width':1.25, 'stroke-dasharray':'4 3'}), S('line',{x1:L, x2:W-R, y1:y(P), y2:y(P), stroke:'var(--ink-2)', 'stroke-width':1.25, 'stroke-dasharray':'4 3'}));
-  [['Knowing-doing gap', L+8, T+16, 'start'], ['Role model', W-R-8, T+16, 'end'], ['Priority development', L+8, H-B-8, 'start'], ['Intuitive, or a test problem', W-R-8, H-B-(W<430?26:8), 'end']].forEach(function(q){ g.push(S('text',{x:q[1], y:q[2], 'text-anchor':q[3], 'font-size':11.5, 'font-weight':600, fill:'var(--ink-2)'}, q[0])); });
+  [['Knows it, team does not see it', L+8, T+16, 'start'], ['Role model', W-R-8, T+16, 'end'], ['Priority development', L+8, H-B-8, 'start'], ['Does it, scores low on test', W-R-8, H-B-(W<430?26:8), 'end']].forEach(function(q){ g.push(S('text',{x:q[1], y:q[2], 'text-anchor':q[3], 'font-size':11.5, 'font-weight':600, fill:'var(--ink-2)'}, q[0])); });
   M.sub.filter(function(r){ return r.svOk; }).forEach(function(r){ g.push(S('circle',{cx:x(r.sv.overall), cy:y(r.total), r:5, fill:'var(--lv'+r.level+')', stroke:'var(--surface)', 'stroke-width':2, tabindex:0, style:'cursor:pointer', 'data-tip':nameOf(r.uid,r.label)+'\nTest '+signed(r.total)+' · team '+f2(r.sv.overall)+'\n'+QUADS[r.quad], onclick:function(){ st.c.sel=r.uid; st.c.tab='managers'; render(); }})); });
-  g.push(S('text',{x:(L+W-R)/2, y:H-6, 'text-anchor':'middle', 'font-size':11.5, fill:'var(--ink-2)'}, 'What the team sees: survey average, 1 to 5'), S('text',{x:14, y:(T+H-B)/2, 'text-anchor':'middle', 'font-size':11.5, fill:'var(--ink-2)', transform:'rotate(-90 14 '+((T+H-B)/2)+')'}, 'What the manager knows: test score'));
+  g.push(S('text',{x:(L+W-R)/2, y:H-6, 'text-anchor':'middle', 'font-size':11.5, fill:'var(--ink-2)'}, 'Team rating, 1 to 5 (what the team sees)'), S('text',{x:14, y:(T+H-B)/2, 'text-anchor':'middle', 'font-size':11.5, fill:'var(--ink-2)', transform:'rotate(-90 14 '+((T+H-B)/2)+')'}, 'Test score (what the manager knows)'));
   return S('svg',{viewBox:'0 0 '+W+' '+H, width:'100%', role:'img', 'aria-label':'Managers placed by test score and team survey average, in four quadrants'}, g);
 }
 function cNeeds(v){
@@ -1084,11 +1086,11 @@ function cNeeds(v){
   const wrong=M.patTotal.A+M.patTotal.D+M.patTotal.P+M.patTotal.R+M.patTotal.X;
   const hasPairs=M.sub.some(function(r){ return r.svOk; });
   put(v, h('div',{class:'grid2'},
-    h('div',{class:'card'}, h('h3',null,'How managers err, across all situations'),
-      h('div',{class:'bars'}, PAT_ORDER.map(function(t){ const n=M.patTotal[t]; return [h('span',{class:'lab'}, h('span',{class:'sw '+PATS[t].cls}), ' '+PATS[t].name), h('div',{class:'track', tabindex:'0', 'data-tip':PATS[t].name+': '+n+' of '+wrong+' missed picks'}, h('i',{style:{left:'0', width:(wrong?100*n/wrong:0)+'%', background:'var(--pat-'+t.toLowerCase()+')'}})), h('span',{class:'val'}, pct(n,wrong)+'%')]; })),
-      h('p',{class:'small muted'}, 'Share of the times a manager missed the best response. "Bends rules" is offered in fewer situations, so its share is naturally smaller.')),
-    h('div',{class:'card'}, h('h3',null,'What managers know against what teams see'), hasPairs ? scatterSvg(M, cardW(false)) : h('p',{class:'muted'}, 'Appears once a manager has submitted and '+st.cfg.minRaters+' or more people have answered the team survey about them.'),
-      hasPairs && h('p',{class:'small muted'}, 'The shaded quadrants are where the test and the team disagree. Each calls for a different kind of help.'))));
+    h('div',{class:'card'}, h('h3',null,'When managers missed the best answer, what did they choose instead?'),
+      h('div',{class:'bars'}, PAT_ORDER.concat(['X']).map(function(t){ const n=M.patTotal[t]; return [h('span',{class:'lab'}, h('span',{class:'sw '+PATS[t].cls}), ' '+PATS[t].name), h('div',{class:'track', tabindex:'0', 'data-tip':PATS[t].name+': '+n+' of '+wrong+' missed picks'}, h('i',{style:{left:'0', width:(wrong?100*n/wrong:0)+'%', background:'var(--pat-'+t.toLowerCase()+')'}})), h('span',{class:'val'}, pct(n,wrong)+'%')]; })),
+      h('p',{class:'small muted'}, 'The bars add up to 100% of the picks that were not the best response. "Cuts corners" is offered in fewer situations than the others, so its share is naturally smaller.'), h('div',{class:'small muted', style:{marginTop:'8px'}}, PAT_ORDER.concat(['X']).map(function(t){ return h('div',null, h('strong',null,PATS[t].name+': '), PATS[t].about); }))),
+    h('div',{class:'card'}, h('h3',null,'Does what managers know show up for their team?'), hasPairs ? scatterSvg(M, cardW(false)) : h('p',{class:'muted'}, 'Appears once a manager has submitted and '+st.cfg.minRaters+' or more people have answered the team survey about them.'),
+      hasPairs && h('p',{class:'small muted'}, 'Each dot is one manager, shown once '+st.cfg.minRaters+' or more of their team have answered the survey. Higher means a better test score (what they know). Further right means a better team rating (what the team sees). The dashed lines are your Proficient standard and team survey threshold from Settings. Shaded boxes are where the test and the team disagree, so each needs a different kind of help.'))));
   put(v, h('div',{class:'card'}, h('h3',null,'Fairness check'), h('p',{class:'small muted'}, 'Average score by group. Groups with fewer than five people are hidden. A gap is a prompt to review the questions, not a finding about the group.'),
     h('div',{class:'scroll-x'}, h('table',{class:'data', id:'c-fair'}, h('thead',null, h('tr',null, ['Group','Managers','Average score','SD'].map(function(t,i){ return h('th',{class:i?'n':null}, t); }))),
       h('tbody',null, M.fairness.map(function(f){ if(!f.groups.some(function(g){ return g.value!=='Not stated'; })) return h('tr',null, h('td',{colspan:'4'}, h('strong',null,f.label), h('span',{class:'muted small'}, '  ·  not answered'))); const shown=f.groups.filter(function(g){ return g.n>=5; }); return [h('tr',null, h('td',{colspan:'4'}, h('strong',null,f.label), shown.length<f.groups.length ? h('span',{class:'muted small'}, '  ·  '+(f.groups.length-shown.length)+' smaller group'+((f.groups.length-shown.length)===1?'':'s')+' hidden') : null)), shown.map(function(g){ return h('tr',null, h('td',null,g.value), h('td',{class:'n'}, String(g.n)), h('td',{class:'n'}, f1(g.mean)), h('td',{class:'n'}, f1(g.sd))); })]; }))))));
@@ -1187,7 +1189,7 @@ async function saveKey(){
 }
 function exportManagers(){
   const M=st.c.model; const head=['name','status','submitted','minutes','score','margin_of_error','level','level_name','red_flags','missed_best'].concat(DIMS.map(function(d){ return 'dim'+d.n; }), ['avoids','dominates','appeases','bends_rules','partial','team_responses','team_average','knows_and_does'], DIMS.map(function(d){ return 'team_dim'+d.n; }), BG_FIELDS.map(function(f){ return f.id; }));
-  const rows=M.rows.map(function(r){ const sub=r.status==='submitted'; return [safeText(nameOf(r.uid,r.label)), r.status, r.submittedAt||'', Math.round(r.activeSec/60), sub?r.total:'', sub?f1(M.std.sem):'', sub?r.level:'', sub?LEVELS[r.level]:'', sub?r.rf:'', sub?r.missBest:''].concat(DIMS.map(function(d,ix){ return sub?r.dim[ix]:''; }), sub?[r.pat.A,r.pat.D,r.pat.P,r.pat.R,r.pat.X]:['','','','',''], [r.sv?r.sv.n:0, r.svOk?f2(r.sv.overall):'', r.quad?QUADS[r.quad]:''], DIMS.map(function(d,ix){ return (r.svOk && r.sv.dim[ix]!==null) ? f2(r.sv.dim[ix]) : ''; }), BG_FIELDS.map(function(f){ return safeText((r.bg||{})[f.id]||''); })); });
+  const rows=M.rows.map(function(r){ const sub=r.status==='submitted'; return [safeText(nameOf(r.uid,r.label)), r.status, r.submittedAt||'', Math.round(r.activeSec/60), sub?r.total:'', sub?f1(M.std.sem):'', sub?r.level:'', sub?LEVELS[r.level]:'', sub?r.rf:'', sub?r.missBest:''].concat(DIMS.map(function(d,ix){ return sub?r.dim[ix]:''; }), sub?[r.pat.A,r.pat.D,r.pat.P,r.pat.R,r.pat.X]:['','','','',''], [r.sv?r.sv.n:0, r.svOk?f2(r.sv.overall):'', r.quad?QUADS[r.quad]:''], DIMS.map(function(d,ix){ return (r.svOk && r.sv.dim[ix]!==null) ? f2(r.sv.dim[ix]) : ''; }), BG_FIELDS.map(function(f){ return safeText(bgValue(r, f.id)); })); });
   return csv([head].concat(rows));
 }
 function exportAnswers(){
