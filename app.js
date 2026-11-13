@@ -22,6 +22,59 @@ const PAT_ORDER = ['A','D','P','R'];
 const LEVELS = {5:'The Mentor', 4:'The Anchor', 3:'The Builder', 2:'The Apprentice', 1:'The Explorer'};
 const LEVEL_ABOUT = {5:'Reads situations well and could coach others.', 4:'Makes sound, steady calls in most situations.', 3:'Has good foundations; consistency is still growing.', 2:'Is learning the craft, with clear areas to practise.', 1:'Is new to many of these situations and has the most to gain from training.'};
 const CUT_NAME = function(l){ return LEVELS[l].replace(/^The /,''); };
+/* Persona portraits: flat SVG characters, one per persona. The background uses the persona colour (--lv1..--lv5),
+   so both themes apply; `.fine` details (eyes, brows, cheeks) are hidden on small badges. */
+const PERSONA_ART = (function(){
+  const INK = '#1d1c1a';
+  const body = '<path d="M8.76 54C11 43.2 20.8 39 32 39S53 43.2 55.24 54A32 32 0 0 1 8.76 54Z" fill="#000" fill-opacity=".2"/>';
+  const face = function(y){ return '<circle cx="32" cy="' + y + '" r="11.6" fill="#fff" fill-opacity=".94"/>'; };
+  const cheeks = function(y){ return '<g class="fine" fill="#ff7a6b" fill-opacity=".28"><circle cx="25.4" cy="' + y + '" r="2.1"/><circle cx="38.6" cy="' + y + '" r="2.1"/></g>'; };
+  const eyes = function(y){ return '<g class="fine" fill="' + INK + '"><circle cx="27.8" cy="' + y + '" r="1.55"/><circle cx="36.2" cy="' + y + '" r="1.55"/></g>'; };
+  const brows = function(d){ return '<path class="fine" d="' + d + '" fill="none" stroke="' + INK + '" stroke-width="1.3" stroke-linecap="round"/>'; };
+  const smile = function(y, open){ return open
+    ? '<path class="fine" d="M28.4 ' + y + 'H35.6Q35.2 ' + (y + 3.6) + ' 32 ' + (y + 3.6) + 'T28.4 ' + y + 'Z" fill="' + INK + '"/>'
+    : '<path class="fine" d="M28.6 ' + y + 'Q32 ' + (y + 2.6) + ' 35.4 ' + y + '" fill="none" stroke="' + INK + '" stroke-width="1.5" stroke-linecap="round"/>'; };
+  const art = {
+    // 1 The Explorer: bush hat and a compass
+    1: body + face(28) + cheeks(31.4) + eyes(28.6) + brows('M25.8 25.2Q27.8 23.6 29.8 24.6M34.4 25.4H38.2') + smile(32.2) +
+       '<ellipse cx="32" cy="20.6" rx="17.5" ry="3.7" fill="#ead9a8" stroke="' + INK + '" stroke-width="1.3"/>' +
+       '<path d="M22.6 20.4C22.6 13.6 26.8 10.6 32 10.6S41.4 13.6 41.4 20.4Z" fill="#ead9a8" stroke="' + INK + '" stroke-width="1.3"/>' +
+       '<rect x="22.8" y="16.4" width="18.4" height="3.2" fill="' + INK + '"/>' +
+       '<circle cx="45" cy="49" r="6.4" fill="#fff" stroke="' + INK + '" stroke-width="1.5"/>' +
+       '<path d="M45 44.4L46.6 49H43.4Z" fill="#d03b3b"/><path d="M45 53.6L46.6 49H43.4Z" fill="' + INK + '"/>',
+    // 2 The Apprentice: pencil behind the ear, sprout pin
+    2: '<g transform="rotate(32 46 18)"><rect x="43.8" y="5" width="4.6" height="21" rx="1.1" fill="#fff" stroke="' + INK + '" stroke-width="1.3"/><rect x="43.8" y="5" width="4.6" height="3.6" rx="1.1" fill="' + INK + '"/><path d="M43.8 26L46.1 30.8 48.4 26Z" fill="#fff" stroke="' + INK + '" stroke-width="1.3" stroke-linejoin="round"/><path d="M45.3 29.1L46.1 30.8 46.9 29.1Z" fill="' + INK + '"/></g>' +
+       body + face(27) + cheeks(30.4) + eyes(27.6) + smile(30.6, true) +
+       '<path d="M20.5 25.6C20.8 18.4 25.6 15.2 32 15.2S43.2 18.4 43.5 25.6C40.2 22.2 36.2 21.2 32 21.6 27.8 21.2 23.8 22.2 20.5 25.6Z" fill="' + INK + '"/>' +
+       '<path d="M22 51.5V45.2" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/>' +
+       '<path d="M22 46.6C22 43.4 19.6 42 17.2 42.4 17.4 45.2 19.4 46.8 22 46.6Z" fill="#fff"/>' +
+       '<path d="M22 45.2C22 42 24.4 40.6 26.8 41 26.6 43.8 24.6 45.4 22 45.2Z" fill="#fff"/>',
+    // 3 The Builder: hard hat and a high-visibility vest
+    3: body +
+       '<path d="M22.5 41.2L25.6 54.6M41.5 41.2L38.4 54.6" stroke="#fff" stroke-opacity=".85" stroke-width="2.6"/>' +
+       face(28.4) + cheeks(31.8) + eyes(29) + brows('M25.8 26.4H29.6M34.4 26.4H38.2') + smile(32.6) +
+       '<path d="M19.2 23.4C19.2 15 24.8 10.8 32 10.8S44.8 15 44.8 23.4Z" fill="#fff" stroke="' + INK + '" stroke-width="1.4"/>' +
+       '<rect x="29.9" y="10.9" width="4.2" height="12.4" rx="1.6" fill="' + INK + '"/>' +
+       '<rect x="15.6" y="22.6" width="32.8" height="3.6" rx="1.8" fill="#fff" stroke="' + INK + '" stroke-width="1.4"/>',
+    // 4 The Anchor: captain's cap with an anchor badge
+    4: body +
+       '<g fill="#fff" fill-opacity=".85"><circle cx="32" cy="46" r="1.3"/><circle cx="32" cy="51" r="1.3"/></g>' +
+       face(28.6) + cheeks(32) + eyes(29.2) + smile(32.8) +
+       '<path d="M19.4 20.8C19.4 14.2 25 10.6 32 10.6S44.6 14.2 44.6 20.8Z" fill="#fff" stroke="' + INK + '" stroke-width="1.4"/>' +
+       '<rect x="19.4" y="19.4" width="25.2" height="3.8" fill="' + INK + '"/>' +
+       '<path d="M18.6 22.6Q32 29.4 45.4 22.6Q32 25.6 18.6 22.6Z" fill="' + INK + '"/>' +
+       '<g fill="none" stroke="' + INK + '" stroke-width="1.3" stroke-linecap="round"><circle cx="32" cy="12.9" r="1.1"/><path d="M32 14V18.2M29.9 15.2H34.1M29.2 16.6Q32 19.4 34.8 16.6"/></g>',
+    // 5 The Mentor: silver hair, glasses and a speech bubble
+    5: body + face(28) + cheeks(32) + smile(32.8) +
+       '<path d="M20.4 27C20.4 19 25.4 15.6 32 15.6S43.6 19 43.6 27C42.4 22.8 39 21.4 35.4 21.6 33.6 20.2 30.6 20.2 28.6 21.4 25 21.4 21.8 23 20.4 27Z" fill="#e3e0d8" stroke="' + INK + '" stroke-width="1.2" stroke-linejoin="round"/>' +
+       brows('M24.6 23.6Q27.4 22.6 30 23.4M34 23.4Q36.6 22.6 39.4 23.6') +
+       '<g fill="none" stroke="' + INK + '" stroke-width="1.6"><circle cx="27.4" cy="28.2" r="3.7"/><circle cx="36.6" cy="28.2" r="3.7"/><path d="M31.1 28.2H32.9M23.7 27.6L20.8 26.6M40.3 27.6L43.2 26.6"/></g>' +
+       '<g class="fine" fill="' + INK + '"><circle cx="27.4" cy="28.4" r="1.2"/><circle cx="36.6" cy="28.4" r="1.2"/></g>' +
+       '<path d="M41.6 6.6H56.4A3.2 3.2 0 0 1 59.6 9.8V16.2A3.2 3.2 0 0 1 56.4 19.4H48.4L44.6 23V19.4H41.6A3.2 3.2 0 0 1 38.4 16.2V9.8A3.2 3.2 0 0 1 41.6 6.6Z" fill="#fff" stroke="' + INK + '" stroke-width="1.3" stroke-linejoin="round"/>' +
+       '<g fill="' + INK + '"><circle cx="44.6" cy="13" r="1.25"/><circle cx="49" cy="13" r="1.25"/><circle cx="53.4" cy="13" r="1.25"/></g>'
+  };
+  return function(l){ return '<circle cx="32" cy="32" r="32" fill="var(--lv' + l + ')"/>' + art[l]; };
+})();
 const QUADS = {KD:'Role model', Kd:'Knows it, team does not see it', kD:'Does it, scores low on test', kd:'Priority development'};
 const QUAD_HELP = {KD:'Use as a mentor and panel expert.', Kd:'Coaching and accountability. More classroom training will not fix it.', kD:'Check reading load first, then add frameworks.', kd:'Foundations plus close coaching.'};
 const SCALE = ['Never','Rarely','Sometimes','Often','Always'];
@@ -806,8 +859,22 @@ function viewConsole(v){
 function cardW(full){ const el=$('#view'); const w=el ? el.clientWidth : 1000; const inner=(full || w<896) ? w-42 : (w-16)/2-42; return Math.max(280, Math.min(1140, Math.floor(inner))); }
 let lastW=0, rsT=0;
 window.addEventListener('resize', function(){ clearTimeout(rsT); rsT=setTimeout(function(){ const el=$('#view'); const w=el ? el.clientWidth : 0; if(st.ready && st.route==='console' && Math.abs(w-lastW)>8){ lastW=w; render(); } }, 160); });
-function levelChip(l){ return h('span',{class:'chip', title:LEVEL_ABOUT[l]}, h('span',{class:'sw lv'+l}), LEVELS[l]); }
+function levelChip(l){ return h('span',{class:'chip persona ps'+l, title:LEVEL_ABOUT[l]}, personaIcon(l, 20), LEVELS[l]); }
 function patChip(t, extra){ return h('span',{class:'chip'}, h('span',{class:'sw '+PATS[t].cls}), PATS[t].name+(extra||'')); }
+function personaIcon(l, size){
+  const s=S('svg',{class:'pav'+(size<32 ? ' sm' : ''), viewBox:'0 0 64 64', width:String(size), height:String(size), 'aria-hidden':'true', focusable:'false'});
+  s.innerHTML=PERSONA_ART(l);
+  return s;
+}
+function personaGallery(M){
+  return h('div',{class:'personas'}, [5,4,3,2,1].map(function(l){
+    const n=M.levels[l], p=pct(n, M.stats.n);
+    return h('div',{class:'persona-tile ps'+l, id:'persona-'+l},
+      h('div',{class:'persona-id'}, personaIcon(l, 52), h('div',{class:'stack tight'}, h('strong',null, LEVELS[l]), h('span',{class:'small muted'}, LEVEL_ABOUT[l]))),
+      h('div',{class:'persona-count'}, h('span',{class:'persona-n'}, String(n)), h('span',{class:'small muted'}, (n===1 ? 'manager' : 'managers')+' · '+p+'%')),
+      h('div',{class:'track', tabindex:'0', 'data-tip':LEVELS[l]+': '+n+' of '+M.stats.n+' managers'}, h('i',{style:{left:'0', width:p+'%', background:'var(--lv'+l+')'}})));
+  }));
+}
 function kpi(k, val, sub){ return h('div',{class:'kpi'}, h('span',{class:'k'}, k), h('span',{class:'v'}, val), sub && h('span',{class:'s'}, sub)); }
 function rulerSvg(M, W){
   const L=30, R=30, x=function(val){ return L+(val+54)/108*(W-L-R); };
@@ -821,13 +888,6 @@ function rulerSvg(M, W){
   g.push(S('text',{x:W-R, y:H-3, 'text-anchor':'end', 'font-size':11, fill:'var(--ink-3)'}, 'Total score, -54 to +54'));
   return S('svg',{viewBox:'0 0 '+W+' '+H, width:'100%', role:'img', 'aria-label':'Each dot is one manager, placed by total score, with the persona cut-offs marked'}, g);
 }
-function levelBars(M){
-  const max=Math.max(1, M.levels[1], M.levels[2], M.levels[3], M.levels[4], M.levels[5]);
-  return h('div',{class:'bars'}, [5,4,3,2,1].map(function(l){ return [
-    h('span',{class:'lab'}, h('span',{class:'sw lv'+l}), ' '+LEVELS[l]),
-    h('div',{class:'track', tabindex:'0', 'data-tip':LEVELS[l]+'. '+LEVEL_ABOUT[l]+'\n'+M.levels[l]+' of '+M.stats.n+' managers'}, h('i',{style:{left:'0', width:(100*M.levels[l]/max)+'%', background:'var(--lv'+l+')'}})),
-    h('span',{class:'val'}, M.levels[l]+' · '+pct(M.levels[l], M.stats.n)+'%') ]; }));
-}
 function cOverview(v){
   const C=st.c, M=C.model, s=M.stats, svOk=M.rows.filter(function(r){ return r.svOk; }).length;
   put(v, h('div',{class:'kpis'},
@@ -837,12 +897,13 @@ function cOverview(v){
     kpi('Margin of error', f1(s.sem), s.semAuto ? 'from your data · reliability '+f2(s.rel) : 'provisional until 30 managers submit'),
     kpi('Persona cut-offs', signed(M.std.P)+' / '+signed(M.std.M), 'Where '+LEVELS[4]+' / '+LEVELS[3]+' start · provisional'),
     kpi('Senior feedback', String(M.srResponses), M.rows.filter(function(r){ return r.srOk; }).length+' managers covered')));
-  put(v, h('div',{class:'card'}, h('div',{class:'row between'}, h('h3',null,'Where each manager scored'), h('div',{class:'legend'}, [1,2,3,4,5].map(function(l){ return h('span',null, h('span',{class:'sw lv'+l}), LEVELS[l]); }))),
+  put(v, h('div',{class:'card'}, h('div',{class:'row between'}, h('h3',null,'Where each manager scored'), h('div',{class:'legend'}, [1,2,3,4,5].map(function(l){ return h('span',null, personaIcon(l, 18), LEVELS[l]); }))),
     s.n ? rulerSvg(M, cardW(true)) : h('p',{class:'muted'}, 'Scores appear once managers submit.')));
+  put(v, h('div',{class:'card', id:'c-personas'}, h('div',{class:'row between'}, h('h3',null,'Managers by persona'), h('span',{class:'small muted'}, 'Personas describe judgment on this test. They are a training signal, never a verdict on a person.')),
+    s.n ? personaGallery(M) : h('p',{class:'muted'}, 'Personas appear once managers submit.')));
   const val=M.validity;
   const unlocked=C.sample ? 0 : C.responses.filter(function(r){ return r.status==='submitted' && !C.vault[r.uid]; }).length;
   put(v, h('div',{class:'grid2'},
-    h('div',{class:'card'}, h('h3',null,'Managers by persona'), s.n ? levelBars(M) : h('p',{class:'muted'}, 'Personas appear once managers submit.'), h('p',{class:'small muted'}, 'Personas describe judgment on this test. They are a training signal, never a verdict on a person.')),
     h('div',{class:'card'}, h('h3',null,'Evidence so far'),
       h('dl',{class:'facts'},
         h('dt',null,'Test against team survey'), h('dd',null, val.n>=10 && isFinite(val.r) ? 'r = '+f2(val.r)+' across '+val.n+' managers'+(val.ci ? ' (95% range '+f2(val.ci[0])+' to '+f2(val.ci[1])+')' : '')+'.' : 'Needs at least 10 managers with enough team responses. So far: '+val.n+'.'),
@@ -900,8 +961,8 @@ function cManagers(v){
 }
 function managerDetail(v, row, M){
   const C=st.c, name=nameOf(row.uid, row.label), sub=row.status==='submitted';
-  const head=h('div',{class:'row between'}, h('div',{class:'stack tight'}, h('h2',{id:'c-detail-name'}, name), h('span',{class:'small muted'}, sub ? 'Submitted '+dateShort(row.submittedAt)+' · '+Math.round(row.activeSec/60)+' minutes'+(row.activeSec>st.cfg.timeLimitMin*60 ? ' (over the '+st.cfg.timeLimitMin+'-minute guide)' : '') : 'In progress · '+row.answered+' of 27 answered')),
-    sub && h('div',{class:'row'}, levelChip(row.level), h('span',{class:'chip num'}, signed(row.total)+' ± '+f1(M.std.sem)), row.quad && h('span',{class:'chip'}, QUADS[row.quad])));
+  const head=h('div',{class:'row between'}, h('div',{class:'row persona-head'}, sub && personaIcon(row.level, 56), h('div',{class:'stack tight'}, h('h2',{id:'c-detail-name'}, name), h('span',{class:'small muted'}, sub ? 'Submitted '+dateShort(row.submittedAt)+' · '+Math.round(row.activeSec/60)+' minutes'+(row.activeSec>st.cfg.timeLimitMin*60 ? ' (over the '+st.cfg.timeLimitMin+'-minute guide)' : '') : 'In progress · '+row.answered+' of 27 answered'), sub && h('span',{class:'small'}, h('strong',null, LEVELS[row.level]+'. '), h('span',{class:'muted'}, LEVEL_ABOUT[row.level])))),
+    sub && h('div',{class:'row'}, h('span',{class:'chip num'}, signed(row.total)+' ± '+f1(M.std.sem)), row.quad && h('span',{class:'chip'}, QUADS[row.quad])));
   const card=h('div',{class:'card', id:'c-detail'}, head);
   if(!sub){ put(card, h('p',{class:'muted'}, 'Scores appear once this manager submits.'), seniorBlock(row), deleteControls(row, name)); put(v, card); return; }
   if(row.notes.length) put(card, h('div',{class:'notice'}, row.notes.join(' ')));
