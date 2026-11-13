@@ -2,7 +2,7 @@
 
 A situational judgment test for people managers, a confidential survey for their teams, feedback from their own managers, and an administrator console that turns the results into training priorities.
 
-- **Managers** answer 27 workplace situations. For each one they pick the most and the least effective of four responses. They never see a score.
+- **Managers** answer 27 workplace situations. For each one they pick the most and the least effective of four responses. They never see a score; once an administrator shares results, they see their persona.
 - **Team members** answer 18 questions about what their manager does day to day. Results are shown only as averages, once at least five people have answered about the same manager.
 - **Their own managers** answer 18 questions about what they see a manager who reports to them do, with two optional comments. Administrators see these answers with the rater's name; the manager's development summary names only the areas rated highest and lowest.
 - **Administrators** see scores, personas, error patterns, red flags and the reasoning behind each, team survey averages, training needs across the group, question statistics, and a development summary to send each manager.

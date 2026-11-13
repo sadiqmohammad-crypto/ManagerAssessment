@@ -71,6 +71,12 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // Personas shared with managers: each manager reads only their own; administrators write them.
+    match /results/{uid} {
+      allow read: if isAdmin() || isOwn(uid);
+      allow create, update, delete: if isAdmin();
+    }
+
     // Feedback on a manager from the manager they report to: stored against the person who gave it.
     // That person and administrators only.
     match /senior/{uid} {

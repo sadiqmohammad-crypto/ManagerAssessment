@@ -21,6 +21,7 @@ It has four addresses:
 | --- | --- | --- |
 | Answer key, settings, locked copies | Administrators | Administrators |
 | A manager's answers | That manager and administrators | That manager, until they submit; administrators |
+| A manager's persona, once you share it | That manager and administrators | Administrators |
 | A person's team feedback | That person and administrators | That person; administrators |
 | Feedback a person gives on a manager who reports to them | That person and administrators | That person; administrators |
 | List of managers taking part (names only) | Anyone signed in | Each manager adds themselves |
@@ -105,7 +106,7 @@ Keep the key file private. Don't email it around, don't add it to this repositor
 2. In the console, check the manager appears with a persona, then delete the trial data: **Settings** → **End of cycle**.
 3. Send the links to everyone. Anyone with a Google account can sign in; nobody needs to be added first.
 
-While responses come in, press **Lock new submissions** on the Overview tab now and then. It keeps an administrator-only copy of every submitted answer sheet.
+While responses come in, press **Lock new submissions** on the Overview tab now and then. It keeps an administrator-only copy of every submitted answer sheet. Press **Share personas** there when you want managers to see their persona on their assessment page.
 
 ## Troubleshooting
 

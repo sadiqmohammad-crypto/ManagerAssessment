@@ -21,6 +21,7 @@ const PATS = {
 const PAT_ORDER = ['A','D','P','R'];
 const LEVELS = {5:'The Mentor', 4:'The Anchor', 3:'The Builder', 2:'The Apprentice', 1:'The Explorer'};
 const LEVEL_ABOUT = {5:'Reads situations well and could coach others.', 4:'Makes sound, steady calls in most situations.', 3:'Has good foundations; consistency is still growing.', 2:'Is learning the craft, with clear areas to practise.', 1:'Is new to many of these situations and has the most to gain from training.'};
+const PERSONA_YOU = {5:'You read situations well and could coach other managers.', 4:'You make sound, steady calls in most situations.', 3:'You have good foundations, and your consistency is still growing.', 2:'You are learning the craft, with clear areas to practise.', 1:'Many of these situations are new to you, so you have the most to gain from training.'};
 const CUT_NAME = function(l){ return LEVELS[l].replace(/^The /,''); };
 /* Persona portraits: flat SVG characters, one per persona. The background uses the persona colour (--lv1..--lv5),
    so both themes apply; `.fine` details (eyes, brows, cheeks) are hidden on small badges. */
@@ -369,10 +370,10 @@ window.__mja = {scoreResponse:scoreResponse, opportunities:opportunities, levelO
 /* ---------- state ---------- */
 const st = {
   ready:false, meLoaded:false, preview:false, db:null, user:null, dl:null, me:{id:null, name:'', isOwner:false}, cfg:Object.assign({}, CFG_DEFAULT), route:'home', names:{},
-  a:{loaded:false, loading:false, doc:null, step:'intro', idx:0, order:[], optOrder:{}, bg:{}, consent:false, typedName:'', busy:false, error:'', confirm:false},
+  a:{loaded:false, loading:false, doc:null, result:null, step:'intro', idx:0, order:[], optOrder:{}, bg:{}, consent:false, typedName:'', busy:false, error:'', confirm:false},
   f:{loaded:false, loading:false, doc:null, step:'intro', roster:[], hits:[], q:'', mid:null, midName:'', ans:{}, prevAt:null, busy:false, error:''},
   s:{loaded:false, loading:false, doc:null, step:'intro', roster:[], hits:[], q:'', mid:null, midName:'', ans:{}, good:'', grow:'', prevAt:null, busy:false, error:''},
-  c:{loaded:false, loading:false, tab:'overview', old:[], oldVault:[], key:null, settings:Object.assign({}, SET_DEFAULT), responses:[], surveys:[], seniors:[], vault:{}, sample:false, sampleOff:false, sampleData:null, model:null, sel:null, sort:{k:'total', dir:-1}, openItem:null, msg:'', error:'', exportText:'', confirmDelete:null, busy:false, loadedAt:null}
+  c:{loaded:false, loading:false, tab:'overview', old:[], oldVault:[], key:null, settings:Object.assign({}, SET_DEFAULT), responses:[], surveys:[], seniors:[], results:{}, vault:{}, sample:false, sampleOff:false, sampleData:null, model:null, sel:null, sort:{k:'total', dir:-1}, openItem:null, msg:'', error:'', exportText:'', confirmDelete:null, busy:false, loadedAt:null}
 };
 const saver = {pending:null, timer:0, chain:Promise.resolve(), state:'saved', msg:''};
 
@@ -458,13 +459,13 @@ function viewHome(v){
       st.me.isOwner && choice('console', 'Administrator', 'Open the console', 'Results, personas and training needs. Visible only to you.'))
   );
   const prob=st.meLoaded ? accessProblem() : ''; if(prob) put(v, h('div',{class:'notice warn'}, prob));
-  put(v, h('div',{class:'notice'}, h('strong',null,'No scores are shown on this page. '), 'Managers receive a development summary from the administrator. Team feedback is reported only as averages. Feedback from a manager\'s own manager goes to the administrator.'));
+  put(v, h('div',{class:'notice'}, h('strong',null,'No scores are shown on this page. '), 'Managers see their persona here once the administrator shares it, and receive a development summary. Team feedback is reported only as averages. Feedback from a manager\'s own manager goes to the administrator.'));
 }
 
 /* ---------- manager assessment ---------- */
 async function loadA(){
   const A=st.a; A.loading=true;
-  try{ const s=await st.db.doc('responses/'+st.me.id).get(); A.doc=s.exists ? clone(s.data()) : null; if(A.doc){ A.doc.answers=A.doc.answers||{}; setupA(); } }
+  try{ const got=await Promise.all([st.db.doc('responses/'+st.me.id).get(), st.db.doc('results/'+st.me.id).get()]); const s=got[0]; A.result=got[1].exists ? clone(got[1].data()) : null; A.doc=s.exists ? clone(s.data()) : null; if(A.doc){ A.doc.answers=A.doc.answers||{}; setupA(); } }
   catch(e){ A.error='Could not load your assessment. Reload the page to try again.'; }
   A.loaded=true; A.loading=false; render();
 }
@@ -551,7 +552,7 @@ function aIntro(v){
     h('div',{class:'card'}, h('dl',{class:'facts'},
       h('dt',null,'What you do'), h('dd',null,'For each situation you read four possible responses. You choose the one you think is most effective and the one you think is least effective. Often more than one response will look sensible. Think about what each one would lead to, and pick the one you judge best.'),
       h('dt',null,'Why'), h('dd',null,'The results are used to plan management training. They are not used for pay, promotion or appraisal, and there is no pass or fail.'),
-      h('dt',null,'Who sees your answers'), h('dd',null,'Only the assessment administrator. You will not see a score. Afterwards you receive a short development summary.'),
+      h('dt',null,'Who sees your answers'), h('dd',null,'Only the assessment administrator. You will not see a score. Once the administrator shares results, this page shows your persona, and you receive a short development summary.'),
       h('dt',null,'Time'), h('dd',null,'About 40 minutes. A '+st.cfg.timeLimitMin+'-minute guide is shown as you go. Please finish in one sitting.'),
       h('dt',null,'Working alone'), h('dd',null,'Answer on your own, without colleagues, notes or AI tools. The summary is only useful to you if the answers are yours.'),
       h('dt',null,'Your data'), h('dd',null,'Your answers are stored against your account for this assessment cycle. Ask the administrator if you want them deleted.'))),
@@ -602,9 +603,21 @@ function aReview(v){
       !open.length && (A.confirm ? h('button',{class:'btn primary', id:'a-submit-confirm', disabled:A.busy, onclick:submitA}, A.busy ? 'Submitting' : 'Confirm and submit') : h('button',{class:'btn primary', id:'a-submit', onclick:function(){ A.confirm=true; render(); }}, 'Submit answers'))),
     h('span',{class:'save'+(saver.state==='error'?' err':''), id:'a-save', role:'status'}, saveText()));
 }
+function personaReveal(){
+  const A=st.a, x=A.result, l=(x && isCurrentForm(x)) ? Number(x.level) : 0;
+  if(!LEVELS[l]) return h('div',{class:'card', id:'a-persona-wait'},
+    h('h3',null,'Your persona'),
+    h('p',{class:'muted'}, 'Your persona will appear here once the administrator shares results. Come back to this page later.'),
+    h('div',{class:'row'}, h('button',{class:'btn sm', id:'a-persona-check', onclick:function(){ A.loaded=false; render(); }}, 'Check again')));
+  return h('div',{class:'card persona-reveal ps'+l, id:'a-persona'},
+    h('div',{class:'persona-reveal-head'}, personaIcon(l, 96),
+      h('div',{class:'stack tight'}, h('span',{class:'small muted'}, 'Your persona'), h('h2',{id:'a-persona-name'}, LEVELS[l]), h('p',null, PERSONA_YOU[l]))),
+    h('p',{class:'small muted'}, 'Your persona describes how you handled the 27 situations in this assessment. It is a starting point for your development, not a verdict on you. Your development summary shows where to focus.'));
+}
 function aDone(v){
   put(v, h('h1',{id:'a-done'}, 'Thank you. Your answers are recorded.'),
     h('p',{class:'lede'}, 'You do not need to do anything else. The administrator will send you a short development summary.'),
+    personaReveal(),
     h('div',{class:'notice'}, 'Submitted on '+dateShort(st.a.doc.submittedAt)+'. No score is shown here, by design.'),
     h('div',{class:'row'}, h('a',{class:'btn', href:'#feedback'}, 'Give feedback on your own manager')));
 }
@@ -817,10 +830,10 @@ async function fetchAll(path){
 async function loadC(){
   const C=st.c; C.loading=true; C.error='';
   try{
-    const got=await Promise.all([st.db.doc('admin/key').get(), st.db.doc('admin/settings').get(), fetchAll('responses'), fetchAll('survey'), fetchAll('admin/vault/r'), fetchAll('senior')]);
+    const got=await Promise.all([st.db.doc('admin/key').get(), st.db.doc('admin/settings').get(), fetchAll('responses'), fetchAll('survey'), fetchAll('admin/vault/r'), fetchAll('senior'), fetchAll('results')]);
     C.key=(got[0].exists && got[0].data() && got[0].data().items) ? clone(got[0].data()) : null;
     C.settings=Object.assign({}, SET_DEFAULT, got[1].exists ? got[1].data() : {});
-    C.old=got[2].filter(function(r){ return !isCurrentForm(r); }); C.responses=got[2].filter(isCurrentForm); C.surveys=got[3]; C.seniors=got[5]; C.vault={}; C.oldVault=[]; got[4].forEach(function(x){ if(isCurrentForm(x)) C.vault[x.uid]=x; else C.oldVault.push(x.uid); });
+    C.old=got[2].filter(function(r){ return !isCurrentForm(r); }); C.responses=got[2].filter(isCurrentForm); C.surveys=got[3]; C.seniors=got[5]; C.results={}; got[6].forEach(function(x){ C.results[x.uid]=x; }); C.vault={}; C.oldVault=[]; got[4].forEach(function(x){ if(isCurrentForm(x)) C.vault[x.uid]=x; else C.oldVault.push(x.uid); });
     C.loadedAt=new Date();
     C.sample=!!C.key && !C.sampleOff && !C.responses.some(function(r){ return r.status==='submitted'; });
     if(C.sample && !C.sampleData) C.sampleData=makeSample(C.key);
@@ -914,8 +927,38 @@ function cOverview(v){
         h('dt',null,'Window'), h('dd',null, st.cfg.open ? 'Open. Managers and teams can take part.' : 'Closed. New starts are blocked; managers already in progress can finish.'),
         h('dt',null,'Sharing'), h('dd',null, 'Share this page from the Share menu as Contributor. Viewers cannot save answers. Do not make anyone an Editor: editors can change this page.'),
         h('dt',null,'Links'), h('dd',null, 'Add #assessment to the page link for managers, and #feedback for their teams.'),
-        h('dt',null,'Locked submissions'), h('dd',null, C.sample ? 'Not available with sample data.' : (unlocked ? unlocked+' submitted and not yet locked. Locking keeps a copy only you can change, so later edits by a participant are detected.' : 'All submitted answers are locked.'))),
-      (!C.sample && unlocked>0) && h('div',{class:'row'}, h('button',{class:'btn sm', id:'c-lock', disabled:C.busy, onclick:lockNew}, C.busy ? 'Locking' : 'Lock '+unlocked+' new submission'+(unlocked===1?'':'s')))));
+        h('dt',null,'Locked submissions'), h('dd',null, C.sample ? 'Not available with sample data.' : (unlocked ? unlocked+' submitted and not yet locked. Locking keeps a copy only you can change, so later edits by a participant are detected.' : 'All submitted answers are locked.')),
+        h('dt',null,'Personas'), h('dd',null, personaShareText(M))),
+      (!C.sample && unlocked>0) && h('div',{class:'row'}, h('button',{class:'btn sm', id:'c-lock', disabled:C.busy, onclick:lockNew}, C.busy ? 'Locking' : 'Lock '+unlocked+' new submission'+(unlocked===1?'':'s'))),
+      personaShareButton(M)));
+}
+function pendingShares(M){
+  const C=st.c; if(C.sample || !M) return [];
+  return M.sub.filter(function(r){ const x=C.results[r.uid]; return !x || !isCurrentForm(x) || x.level!==r.level; });
+}
+function personaShareText(M){
+  const C=st.c; if(C.sample) return 'Not available with sample data.';
+  const n=M.sub.length, shared=M.sub.filter(function(r){ const x=C.results[r.uid]; return x && isCurrentForm(x); }).length, pend=pendingShares(M).length;
+  if(!n) return 'Each manager sees their own persona on their assessment page once you share it. Nobody sees anyone else\'s.';
+  return shared+' of '+n+' submitted manager'+(n===1?'':'s')+' can see their persona on their assessment page.'+(pend ? ' '+pend+(pend===1?' is':' are')+' new or changed since you last shared.' : '')+' Nobody sees anyone else\'s.';
+}
+function personaShareButton(M){
+  const C=st.c, pend=pendingShares(M);
+  if(C.sample || !pend.length) return null;
+  return h('div',{class:'row'}, h('button',{class:'btn sm', id:'c-share', disabled:C.busy, onclick:sharePersonas}, C.busy ? 'Sharing' : 'Share personas with '+pend.length+' manager'+(pend.length===1?'':'s')));
+}
+function sharedNote(row){
+  const x=st.c.results[row.uid];
+  if(!x || !isCurrentForm(x)) return 'Not shared with them yet.';
+  if(x.level!==row.level) return 'They currently see '+LEVELS[x.level]+' (shared '+dateShort(x.sharedAt)+'). Share personas again to update it.';
+  return 'They can see this persona (shared '+dateShort(x.sharedAt)+').';
+}
+async function sharePersonas(){
+  const C=st.c; if(C.busy || C.sample || !C.model) return; C.busy=true; C.error=''; render();
+  const todo=pendingShares(C.model);
+  try{ for(const r of todo){ const rec={uid:r.uid, form:FORM, level:r.level, sharedAt:nowISO()}; await retry(function(){ return st.db.doc('results/'+r.uid).set(rec); }); C.results[r.uid]=rec; } }
+  catch(e){ C.error=(e && e.code==='invalid_argument') ? 'Could not share personas. Publish the current firestore.rules in Firebase (it adds the results collection), then try again.' : 'Could not share every persona. Check your connection and try again.'; }
+  C.busy=false; render();
 }
 async function lockNew(){
   const C=st.c; if(C.busy) return; C.busy=true; render();
@@ -961,7 +1004,7 @@ function cManagers(v){
 }
 function managerDetail(v, row, M){
   const C=st.c, name=nameOf(row.uid, row.label), sub=row.status==='submitted';
-  const head=h('div',{class:'row between'}, h('div',{class:'row persona-head'}, sub && personaIcon(row.level, 56), h('div',{class:'stack tight'}, h('h2',{id:'c-detail-name'}, name), h('span',{class:'small muted'}, sub ? 'Submitted '+dateShort(row.submittedAt)+' · '+Math.round(row.activeSec/60)+' minutes'+(row.activeSec>st.cfg.timeLimitMin*60 ? ' (over the '+st.cfg.timeLimitMin+'-minute guide)' : '') : 'In progress · '+row.answered+' of 27 answered'), sub && h('span',{class:'small'}, h('strong',null, LEVELS[row.level]+'. '), h('span',{class:'muted'}, LEVEL_ABOUT[row.level])))),
+  const head=h('div',{class:'row between'}, h('div',{class:'row persona-head'}, sub && personaIcon(row.level, 56), h('div',{class:'stack tight'}, h('h2',{id:'c-detail-name'}, name), h('span',{class:'small muted'}, sub ? 'Submitted '+dateShort(row.submittedAt)+' · '+Math.round(row.activeSec/60)+' minutes'+(row.activeSec>st.cfg.timeLimitMin*60 ? ' (over the '+st.cfg.timeLimitMin+'-minute guide)' : '') : 'In progress · '+row.answered+' of 27 answered'), sub && h('span',{class:'small'}, h('strong',null, LEVELS[row.level]+'. '), h('span',{class:'muted'}, LEVEL_ABOUT[row.level])), sub && !C.sample && h('span',{class:'small muted', id:'c-shared'}, sharedNote(row)))),
     sub && h('div',{class:'row'}, h('span',{class:'chip num'}, signed(row.total)+' ± '+f1(M.std.sem)), row.quad && h('span',{class:'chip'}, QUADS[row.quad])));
   const card=h('div',{class:'card', id:'c-detail'}, head);
   if(!sub){ put(card, h('p',{class:'muted'}, 'Scores appear once this manager submits.'), seniorBlock(row), deleteControls(row, name)); put(v, card); return; }
@@ -1049,7 +1092,7 @@ async function deleteOld(){
 async function deleteManager(uid){
   const C=st.c; if(C.busy) return; C.busy=true; render();
   try{
-    await st.db.doc('responses/'+uid).delete(); await st.db.doc('roster/'+uid).delete(); await st.db.doc('admin/vault/r/'+uid).delete();
+    await st.db.doc('responses/'+uid).delete(); await st.db.doc('roster/'+uid).delete(); await st.db.doc('admin/vault/r/'+uid).delete(); try{ await st.db.doc('results/'+uid).delete(); }catch(e){}
     for(const s of C.surveys){ if(s.about && s.about[uid]){ const about=Object.assign({}, s.about); delete about[uid]; await st.db.doc('survey/'+s.uid).set(Object.assign({}, s, {about:about})); } }
     for(const s of (C.seniors||[])){ if(s.about && s.about[uid]){ const about=Object.assign({}, s.about); delete about[uid]; await st.db.doc('senior/'+s.uid).set(Object.assign({}, s, {about:about})); } }
   }catch(e){ C.error='Could not delete everything. Refresh and try again.'; }
@@ -1220,6 +1263,7 @@ async function wipeAll(){
     for(const s of C.surveys) await st.db.doc('survey/'+s.uid).delete();
     for(const s of (C.seniors||[])) await st.db.doc('senior/'+s.uid).delete();
     for(const uid in C.vault) await st.db.doc('admin/vault/r/'+uid).delete();
+    for(const uid in (C.results||{})) await st.db.doc('results/'+uid).delete();
   }catch(e){ C.error='Could not delete everything. Refresh and try again.'; }
   C.busy=false; C.confirmDelete=null; C.sel=null; C.loaded=false; render();
 }
