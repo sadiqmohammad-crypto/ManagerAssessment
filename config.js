@@ -1,8 +1,8 @@
-// Manager Judgment Assessment: site settings.
+// Leadership Style Assessment: site settings.
 // Fill in the "firebase" block from Firebase console > Project settings > Your apps > Web app > SDK setup and configuration.
 // These values identify your Firebase project; they are designed to be public. The firestore.rules file is what protects the data.
 window.MJA_CONFIG = {
-  appName: 'Manager Judgment Assessment',
+  appName: 'Leadership Style Assessment',
   // Google accounts on this email domain can use everything: the test and both feedback forms.
   // Keep it in step with signedIn() in firestore.rules.
   allowedDomain: 'databeat.io',

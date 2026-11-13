@@ -313,7 +313,7 @@ function devSummary(row, name){
   const lo=order.slice().sort(function(a,b){ return (a.v-b.v) || ((a.t===null?9:a.t)-(b.t===null?9:b.t)) || (a.ix-b.ix); }).filter(function(x){ return hiIx.indexOf(x.ix)<0; }).slice(0,2);
   let dom=null; PAT_ORDER.forEach(function(t){ if(row.pat[t]>=3 && (dom===null || row.pat[t]>row.pat[dom])) dom=t; });
   const L=[];
-  L.push('Development summary for '+name, 'Manager Judgment Assessment (Form A)', '');
+  L.push('Development summary for '+name, 'Leadership Style Assessment (Form A)', '');
   L.push('What this is', 'You responded to 27 management situations. This summary shows where your judgment was strongest and where practice will help most. It carries no score or ranking and is used only to plan your development.', '');
   L.push('Strongest areas'); hi.forEach(function(x){ L.push('- '+DIMS[x.ix].name+': '+STRENGTH[x.ix]); }); L.push('');
   L.push('Areas to develop'); lo.forEach(function(x){ L.push('- '+DIMS[x.ix].name+': '+DEVELOP[x.ix]); }); L.push('');
@@ -450,7 +450,7 @@ function render(){
 function viewHome(v){
   const choice=function(route, who, what, how){ return h('a',{class:'choice', href:'#'+route, id:'go-'+route}, h('span',{class:'who'}, who), h('span',{class:'what'}, what), h('span',{class:'how'}, how), h('span',{class:'go'}, 'Open')); };
   put(v, 
-    h('div',{class:'hero'}, h('p',{class:'eyebrow'}, 'Form A · 27 situations · Team and senior feedback'), h('h1',null,'Manager Judgment Assessment'),
+    h('div',{class:'hero'}, h('p',{class:'eyebrow'}, 'Form A · 27 situations · Team and senior feedback'), h('h1',null,'Leadership Style Assessment'),
       h('p',{class:'lede'}, 'How managers handle everyday situations, paired with feedback from their teams and from their own managers. The results are used to plan management training.')),
     h('div',{class:'choices'},
       choice('assessment', 'I manage people', 'Take the manager assessment', '27 situations. About 40 minutes, in one sitting.'),
